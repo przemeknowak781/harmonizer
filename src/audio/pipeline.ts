@@ -45,7 +45,7 @@ export async function createAudioPipeline(
   analyser.fftSize = 2048;
 
   // Pitch detector
-  const pitchDetector = await createPitchDetectorNode(context, onPitch);
+  const pitchDetector = await createPitchDetectorNode(context);
 
   // Dry signal path
   const dryGain = context.createGain();
@@ -120,8 +120,7 @@ export async function createAudioPipeline(
     }
   }
 
-  // Override pitch callback to also apply harmony
-  const originalOnPitch = onPitch;
+  // Single pitch handler: update UI + apply harmony
   pitchDetector.port.onmessage = (event: MessageEvent) => {
     const data = event.data as {
       type: string;
@@ -129,7 +128,7 @@ export async function createAudioPipeline(
       confidence: number;
     };
     if (data.type === "pitch") {
-      originalOnPitch(data.frequency, data.confidence);
+      onPitch(data.frequency, data.confidence);
       if (data.confidence > 0.8 && data.frequency > 0) {
         applyHarmony(data.frequency);
       }

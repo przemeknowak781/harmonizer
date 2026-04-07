@@ -1,15 +1,17 @@
-import { yinDetectPitch } from "./yin";
+import { yinDetectPitch, createYinScratchBuffers, type YinScratchBuffers } from "./yin";
 
 const BUFFER_SIZE = 2048;
 
 class PitchDetectorProcessor extends AudioWorkletProcessor {
   private buffer: Float32Array;
   private writeIndex: number;
+  private scratch: YinScratchBuffers;
 
   constructor() {
     super();
     this.buffer = new Float32Array(BUFFER_SIZE);
     this.writeIndex = 0;
+    this.scratch = createYinScratchBuffers(BUFFER_SIZE);
   }
 
   process(inputs: Float32Array[][]): boolean {
@@ -21,7 +23,7 @@ class PitchDetectorProcessor extends AudioWorkletProcessor {
       this.writeIndex++;
 
       if (this.writeIndex >= BUFFER_SIZE) {
-        const result = yinDetectPitch(this.buffer, sampleRate);
+        const result = yinDetectPitch(this.buffer, sampleRate, undefined, this.scratch);
         this.port.postMessage({
           type: "pitch",
           frequency: result.frequency,

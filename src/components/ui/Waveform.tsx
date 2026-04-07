@@ -7,6 +7,7 @@ interface WaveformProps {
 export function Waveform({ analyser }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
+  const dataArrayRef = useRef<Float32Array<ArrayBuffer> | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -16,7 +17,10 @@ export function Waveform({ analyser }: WaveformProps) {
     if (!ctx) return;
 
     const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Float32Array(bufferLength);
+    if (!dataArrayRef.current || dataArrayRef.current.length !== bufferLength) {
+      dataArrayRef.current = new Float32Array(bufferLength);
+    }
+    const dataArray = dataArrayRef.current;
     analyser.getFloatTimeDomainData(dataArray);
 
     const { width, height } = canvas;

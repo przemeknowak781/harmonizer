@@ -13,17 +13,35 @@ const DEFAULT_THRESHOLD = 0.15;
 const MIN_FREQUENCY = 80;
 const MAX_FREQUENCY = 1100;
 
+/**
+ * Create pre-allocated scratch buffers for YIN to avoid GC pressure
+ * on the audio thread. Call once during setup, pass to yinDetectPitch.
+ */
+export function createYinScratchBuffers(bufferSize: number) {
+  const halfSize = Math.floor(bufferSize / 2);
+  return {
+    diff: new Float32Array(halfSize),
+    cmndf: new Float32Array(halfSize),
+  };
+}
+
+export type YinScratchBuffers = ReturnType<typeof createYinScratchBuffers>;
+
 export function yinDetectPitch(
   buffer: Float32Array,
   sampleRate: number,
   threshold: number = DEFAULT_THRESHOLD,
+  scratch?: YinScratchBuffers,
 ): YinResult {
   const halfSize = Math.floor(buffer.length / 2);
   const minPeriod = Math.floor(sampleRate / MAX_FREQUENCY);
   const maxPeriod = Math.floor(sampleRate / MIN_FREQUENCY);
 
+  // Use pre-allocated buffers if provided, otherwise allocate (for tests)
+  const diff = scratch?.diff ?? new Float32Array(halfSize);
+  const cmndf = scratch?.cmndf ?? new Float32Array(halfSize);
+
   // Step 1 & 2: Difference function
-  const diff = new Float32Array(halfSize);
   for (let tau = 0; tau < halfSize; tau++) {
     let sum = 0;
     for (let i = 0; i < halfSize; i++) {
@@ -34,7 +52,6 @@ export function yinDetectPitch(
   }
 
   // Step 3: Cumulative mean normalized difference
-  const cmndf = new Float32Array(halfSize);
   cmndf[0] = 1;
   let runningSum = 0;
   for (let tau = 1; tau < halfSize; tau++) {
