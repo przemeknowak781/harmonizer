@@ -5,7 +5,6 @@ import type { Chord } from "../types/chords";
 describe("VoiceLeader", () => {
   const cMaj: Chord = { root: "C", quality: "major" };
   const fMaj: Chord = { root: "F", quality: "major" };
-  const gMaj: Chord = { root: "G", quality: "major" };
   const amin: Chord = { root: "A", quality: "minor" };
 
   it("first call places voices at chord tones", () => {

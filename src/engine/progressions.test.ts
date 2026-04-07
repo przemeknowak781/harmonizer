@@ -20,21 +20,21 @@ describe("buildProgression", () => {
   it("builds I-IV-V-I in C major", () => {
     const prog = buildProgression("C", "major", [0, 3, 4, 0], 4);
     expect(prog.slots).toHaveLength(4);
-    expect(prog.slots[0].chord.root).toBe("C");
-    expect(prog.slots[1].chord.root).toBe("F");
-    expect(prog.slots[2].chord.root).toBe("G");
-    expect(prog.slots[3].chord.root).toBe("C");
+    expect(prog.slots[0]!.chord.root).toBe("C");
+    expect(prog.slots[1]!.chord.root).toBe("F");
+    expect(prog.slots[2]!.chord.root).toBe("G");
+    expect(prog.slots[3]!.chord.root).toBe("C");
   });
   it("builds i-iv-v-i in A minor", () => {
     const prog = buildProgression("A", "natural-minor", [0, 3, 4, 0], 4);
-    expect(prog.slots[0].chord).toEqual({ root: "A", quality: "minor" });
-    expect(prog.slots[1].chord).toEqual({ root: "D", quality: "minor" });
-    expect(prog.slots[2].chord).toEqual({ root: "E", quality: "minor" });
+    expect(prog.slots[0]!.chord).toEqual({ root: "A", quality: "minor" });
+    expect(prog.slots[1]!.chord).toEqual({ root: "D", quality: "minor" });
+    expect(prog.slots[2]!.chord).toEqual({ root: "E", quality: "minor" });
   });
   it("each slot gets specified beats", () => {
     const prog = buildProgression("C", "major", [0, 4], 4);
-    expect(prog.slots[0].beats).toBe(4);
-    expect(prog.slots[1].beats).toBe(4);
+    expect(prog.slots[0]!.beats).toBe(4);
+    expect(prog.slots[1]!.beats).toBe(4);
   });
 });
 

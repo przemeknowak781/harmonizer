@@ -6,6 +6,12 @@ import { KeySelector } from "../ui/KeySelector";
 import { PresetSelector } from "../ui/PresetSelector";
 import { VoiceControl } from "../ui/VoiceControl";
 import { Waveform } from "../ui/Waveform";
+import { HarmonyModeSelector } from "../ui/HarmonyModeSelector";
+import { RhythmSelector } from "../ui/RhythmSelector";
+import { ChordProgressionEditor } from "../ui/ChordProgressionEditor";
+import { TransportBar } from "../ui/TransportBar";
+import { EffectsPanel } from "../ui/EffectsPanel";
+import { LooperControls } from "../ui/LooperControls";
 import { PRESETS } from "../../engine/presets";
 
 export function MainLayout() {
@@ -17,6 +23,7 @@ export function MainLayout() {
     currentPitch,
     currentConfidence,
     isListening,
+    harmonyMode,
     setKey,
     setPreset,
     setMasterVolume,
@@ -45,7 +52,12 @@ export function MainLayout() {
           <PitchDisplay frequency={currentPitch} confidence={currentConfidence} />
         </section>
 
-        {/* Key & Preset */}
+        {/* Harmony Mode Selector */}
+        <section>
+          <HarmonyModeSelector />
+        </section>
+
+        {/* Key & Preset + Rhythm Selector */}
         <section className="flex flex-col gap-4">
           <KeySelector
             root={key.root}
@@ -54,7 +66,22 @@ export function MainLayout() {
             onModeChange={(mode) => setKey({ ...key, mode })}
           />
           <PresetSelector value={presetName} onChange={setPreset} />
+          <RhythmSelector />
         </section>
+
+        {/* Chord Progression Editor (chord mode only) */}
+        {harmonyMode === "chord" && (
+          <section>
+            <ChordProgressionEditor />
+          </section>
+        )}
+
+        {/* Transport Bar (chord mode only) */}
+        {harmonyMode === "chord" && (
+          <section>
+            <TransportBar pipeline={pipeline} />
+          </section>
+        )}
 
         {/* Voice Controls */}
         <section className="flex gap-3 overflow-x-auto pb-2">
@@ -99,6 +126,16 @@ export function MainLayout() {
         {error && (
           <p className="text-red-400 text-center text-sm">{error}</p>
         )}
+
+        {/* Effects Panel */}
+        <section>
+          <EffectsPanel pipeline={pipeline} />
+        </section>
+
+        {/* Looper Controls */}
+        <section>
+          <LooperControls pipeline={pipeline} />
+        </section>
 
         {/* Master Volume */}
         <section className="flex items-center gap-3">
