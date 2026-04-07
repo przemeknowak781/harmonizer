@@ -1,0 +1,172 @@
+import type { HarmonyPreset, NoteName, ModeName } from "../types/music";
+import { computeHarmony } from "../engine/harmony";
+import {
+  createPitchDetectorNode,
+  type PitchCallback,
+} from "./nodes/pitch-detector-node";
+import {
+  createPitchShifterNode,
+  setPitchShiftRatio,
+} from "./nodes/pitch-shifter-node";
+
+const MAX_VOICES = 4;
+
+export interface AudioPipeline {
+  context: AudioContext;
+  start: () => Promise<void>;
+  stop: () => void;
+  updateHarmony: (
+    root: NoteName,
+    mode: ModeName,
+    preset: HarmonyPreset,
+  ) => void;
+  setDryVolume: (v: number) => void;
+  setMasterVolume: (v: number) => void;
+  setVoiceVolume: (index: number, v: number) => void;
+  setVoicePan: (index: number, pan: number) => void;
+  getAnalyserNode: () => AnalyserNode;
+  destroy: () => void;
+}
+
+export async function createAudioPipeline(
+  onPitch: PitchCallback,
+): Promise<AudioPipeline> {
+  const context = new AudioContext({ sampleRate: 44100 });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+  });
+
+  const source = context.createMediaStreamSource(stream);
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+
+  // Pitch detector
+  const pitchDetector = await createPitchDetectorNode(context, onPitch);
+
+  // Dry signal path
+  const dryGain = context.createGain();
+  dryGain.gain.value = 1;
+
+  // Voice paths: shifter → gain → panner
+  const voiceShifters: AudioWorkletNode[] = [];
+  const voiceGains: GainNode[] = [];
+  const voicePanners: StereoPannerNode[] = [];
+
+  for (let i = 0; i < MAX_VOICES; i++) {
+    const shifter = await createPitchShifterNode(context);
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    const panner = context.createStereoPanner();
+    panner.pan.value = 0;
+
+    source.connect(shifter);
+    shifter.connect(gain);
+    gain.connect(panner);
+
+    voiceShifters.push(shifter);
+    voiceGains.push(gain);
+    voicePanners.push(panner);
+  }
+
+  // Master gain
+  const masterGain = context.createGain();
+  masterGain.gain.value = 0.8;
+
+  // Connect graph
+  source.connect(analyser);
+  source.connect(pitchDetector);
+  source.connect(dryGain);
+
+  dryGain.connect(masterGain);
+  for (const panner of voicePanners) {
+    panner.connect(masterGain);
+  }
+  masterGain.connect(context.destination);
+
+  // Harmony state
+  let currentRoot: NoteName = "C";
+  let currentMode: ModeName = "major";
+  let currentPreset: HarmonyPreset | null = null;
+
+  function applyHarmony(frequency: number) {
+    if (!currentPreset || frequency <= 0) return;
+
+    const result = computeHarmony(
+      frequency,
+      currentRoot,
+      currentMode,
+      currentPreset,
+    );
+
+    for (let i = 0; i < MAX_VOICES; i++) {
+      const shifter = voiceShifters[i];
+      const gain = voiceGains[i];
+      const panner = voicePanners[i];
+      if (!shifter || !gain || !panner) continue;
+
+      const voice = result.voices[i];
+      const voiceConfig = currentPreset.voices[i];
+      if (voice && voiceConfig) {
+        setPitchShiftRatio(shifter, voice.ratio);
+        gain.gain.value = voiceConfig.volume;
+        panner.pan.value = voiceConfig.pan;
+      } else {
+        gain.gain.value = 0;
+      }
+    }
+  }
+
+  // Override pitch callback to also apply harmony
+  const originalOnPitch = onPitch;
+  pitchDetector.port.onmessage = (event: MessageEvent) => {
+    const data = event.data as {
+      type: string;
+      frequency: number;
+      confidence: number;
+    };
+    if (data.type === "pitch") {
+      originalOnPitch(data.frequency, data.confidence);
+      if (data.confidence > 0.8 && data.frequency > 0) {
+        applyHarmony(data.frequency);
+      }
+    }
+  };
+
+  return {
+    context,
+    start: async () => {
+      if (context.state === "suspended") await context.resume();
+    },
+    stop: () => {
+      void context.suspend();
+    },
+    updateHarmony: (root, mode, preset) => {
+      currentRoot = root;
+      currentMode = mode;
+      currentPreset = preset;
+    },
+    setDryVolume: (v) => {
+      dryGain.gain.value = v;
+    },
+    setMasterVolume: (v) => {
+      masterGain.gain.value = v;
+    },
+    setVoiceVolume: (index, v) => {
+      const gain = voiceGains[index];
+      if (gain) gain.gain.value = v;
+    },
+    setVoicePan: (index, pan) => {
+      const panner = voicePanners[index];
+      if (panner) panner.pan.value = pan;
+    },
+    getAnalyserNode: () => analyser,
+    destroy: () => {
+      stream.getTracks().forEach((track) => track.stop());
+      void context.close();
+    },
+  };
+}
