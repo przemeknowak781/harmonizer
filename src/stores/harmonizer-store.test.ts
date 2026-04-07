@@ -82,6 +82,15 @@ describe("harmonizer store", () => {
     expect(useHarmonizerStore.getState().delayFeedback).toBe(0.9);
   });
 
+  it("default cofPresetName is pure-fifths", () => {
+    expect(useHarmonizerStore.getState().cofPresetName).toBe("pure-fifths");
+  });
+
+  it("setCofPreset updates cofPresetName", () => {
+    useHarmonizerStore.getState().setCofPreset("mirror");
+    expect(useHarmonizerStore.getState().cofPresetName).toBe("mirror");
+  });
+
   it("setBpm clamps to 30–300", () => {
     useHarmonizerStore.getState().setBpm(10);
     expect(useHarmonizerStore.getState().bpm).toBe(30);

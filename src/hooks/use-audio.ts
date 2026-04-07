@@ -15,6 +15,7 @@ export function useAudio() {
     key,
     presetName,
     harmonyMode,
+    cofPresetName,
     rhythmPattern,
     reverbMix,
     delayTime,
@@ -37,6 +38,7 @@ export function useAudio() {
 
       pipeline.updateHarmony(key.root, key.mode, PRESETS[presetName]);
       pipeline.setHarmonyMode(harmonyMode);
+      pipeline.setCofPreset(cofPresetName);
       pipeline.setChordProgression(activeProgression);
       pipeline.setRhythmPattern(rhythmPattern, bpm);
       pipeline.setReverbMix(reverbMix);
@@ -57,6 +59,7 @@ export function useAudio() {
     key,
     presetName,
     harmonyMode,
+    cofPresetName,
     rhythmPattern,
     reverbMix,
     delayTime,
@@ -81,6 +84,7 @@ export function useAudio() {
     if (!pipeline) return;
     pipeline.updateHarmony(key.root, key.mode, PRESETS[presetName]);
     pipeline.setHarmonyMode(harmonyMode);
+    pipeline.setCofPreset(cofPresetName);
     pipeline.setChordProgression(activeProgression);
     pipeline.setRhythmPattern(rhythmPattern, bpm);
     pipeline.setReverbMix(reverbMix);
@@ -91,6 +95,7 @@ export function useAudio() {
     key,
     presetName,
     harmonyMode,
+    cofPresetName,
     rhythmPattern,
     reverbMix,
     delayTime,

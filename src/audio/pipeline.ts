@@ -16,6 +16,11 @@ import {
   createPitchShifterNode,
   setPitchShiftRatio,
 } from "./nodes/pitch-shifter-node";
+import {
+  computeCofHarmony,
+  COF_PRESETS,
+  type CofPreset,
+} from "../engine/circle-of-fifths";
 
 const MAX_VOICES = 4;
 
@@ -34,7 +39,8 @@ export interface AudioPipeline {
   setVoicePan: (index: number, pan: number) => void;
   getAnalyserNode: () => AnalyserNode;
   destroy: () => void;
-  setHarmonyMode: (mode: "interval" | "chord") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths") => void;
+  setCofPreset: (name: string) => void;
   setChordProgression: (prog: ChordProgression | null) => void;
   setRhythmPattern: (patternName: string, bpm: number) => void;
   setReverbMix: (v: number) => void;
@@ -122,11 +128,33 @@ export async function createAudioPipeline(
   let currentRoot: NoteName = "C";
   let currentMode: ModeName = "major";
   let currentPreset: HarmonyPreset | null = null;
-  let harmonyMode: "interval" | "chord" = "chord";
+  let harmonyMode: "interval" | "chord" | "fifths" = "chord";
+  let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
 
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
+
+    if (harmonyMode === "fifths") {
+      const result = computeCofHarmony(frequency, currentCofPreset);
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
+
+        const voice = result.voices[i];
+        const voiceConfig = currentCofPreset.voices[i];
+        if (voice && voiceConfig) {
+          setPitchShiftRatio(shifter, voice.ratio);
+          gain.gain.value = voiceConfig.volume;
+          panner.pan.value = voiceConfig.pan;
+        } else {
+          gain.gain.value = 0;
+        }
+      }
+      return;
+    }
 
     if (harmonyMode === "chord" && activeProgression) {
       // Chord-aware path
@@ -237,6 +265,10 @@ export async function createAudioPipeline(
     setHarmonyMode: (mode) => {
       harmonyMode = mode;
       if (mode === "chord") voiceLeader.reset();
+    },
+    setCofPreset: (name) => {
+      const found = COF_PRESETS.find((p) => p.name === name);
+      if (found) currentCofPreset = found;
     },
     setChordProgression: (prog) => {
       activeProgression = prog;

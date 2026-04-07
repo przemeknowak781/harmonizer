@@ -11,7 +11,8 @@ interface HarmonizerState {
   isListening: boolean;
   currentPitch: number | null;
   currentConfidence: number;
-  harmonyMode: "interval" | "chord";
+  harmonyMode: "interval" | "chord" | "fifths";
+  cofPresetName: string;
   rhythmPattern: string;
   reverbMix: number;
   delayTime: number;
@@ -29,7 +30,8 @@ interface HarmonizerState {
   setDryVolume: (v: number) => void;
   setListening: (listening: boolean) => void;
   setPitch: (frequency: number | null, confidence: number) => void;
-  setHarmonyMode: (mode: "interval" | "chord") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths") => void;
+  setCofPreset: (name: string) => void;
   setRhythmPattern: (pattern: string) => void;
   setReverbMix: (v: number) => void;
   setDelayTime: (v: number) => void;
@@ -54,6 +56,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   currentPitch: null,
   currentConfidence: 0,
   harmonyMode: "chord",
+  cofPresetName: "pure-fifths",
   rhythmPattern: "simultaneous",
   reverbMix: 0,
   delayTime: 300,
@@ -73,6 +76,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   setPitch: (frequency, confidence) =>
     set({ currentPitch: frequency, currentConfidence: confidence }),
   setHarmonyMode: (harmonyMode) => set({ harmonyMode }),
+  setCofPreset: (cofPresetName) => set({ cofPresetName }),
   setRhythmPattern: (rhythmPattern) => set({ rhythmPattern }),
   setReverbMix: (reverbMix) => set({ reverbMix: clamp(reverbMix, 0, 1) }),
   setDelayTime: (delayTime) => set({ delayTime: clamp(delayTime, 0, 2000) }),
