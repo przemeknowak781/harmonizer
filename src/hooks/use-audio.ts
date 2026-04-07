@@ -11,7 +11,20 @@ export function useAudio() {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { key, presetName, setPitch, setListening } = useHarmonizerStore();
+  const {
+    key,
+    presetName,
+    harmonyMode,
+    rhythmPattern,
+    reverbMix,
+    delayTime,
+    delayFeedback,
+    delayMix,
+    bpm,
+    activeProgression,
+    setPitch,
+    setListening,
+  } = useHarmonizerStore();
 
   const start = useCallback(async () => {
     try {
@@ -23,6 +36,13 @@ export function useAudio() {
       );
 
       pipeline.updateHarmony(key.root, key.mode, PRESETS[presetName]);
+      pipeline.setHarmonyMode(harmonyMode);
+      pipeline.setChordProgression(activeProgression);
+      pipeline.setRhythmPattern(rhythmPattern, bpm);
+      pipeline.setReverbMix(reverbMix);
+      pipeline.setDelayTime(delayTime);
+      pipeline.setDelayFeedback(delayFeedback);
+      pipeline.setDelayMix(delayMix);
       await pipeline.start();
 
       pipelineRef.current = pipeline;
@@ -33,7 +53,20 @@ export function useAudio() {
         err instanceof Error ? err.message : "Failed to access microphone",
       );
     }
-  }, [key, presetName, setPitch, setListening]);
+  }, [
+    key,
+    presetName,
+    harmonyMode,
+    rhythmPattern,
+    reverbMix,
+    delayTime,
+    delayFeedback,
+    delayMix,
+    bpm,
+    activeProgression,
+    setPitch,
+    setListening,
+  ]);
 
   const stop = useCallback(() => {
     pipelineRef.current?.destroy();
@@ -47,7 +80,25 @@ export function useAudio() {
     const pipeline = pipelineRef.current;
     if (!pipeline) return;
     pipeline.updateHarmony(key.root, key.mode, PRESETS[presetName]);
-  }, [key, presetName]);
+    pipeline.setHarmonyMode(harmonyMode);
+    pipeline.setChordProgression(activeProgression);
+    pipeline.setRhythmPattern(rhythmPattern, bpm);
+    pipeline.setReverbMix(reverbMix);
+    pipeline.setDelayTime(delayTime);
+    pipeline.setDelayFeedback(delayFeedback);
+    pipeline.setDelayMix(delayMix);
+  }, [
+    key,
+    presetName,
+    harmonyMode,
+    rhythmPattern,
+    reverbMix,
+    delayTime,
+    delayFeedback,
+    delayMix,
+    bpm,
+    activeProgression,
+  ]);
 
   return { start, stop, syncSettings, isReady, error, pipeline: pipelineRef };
 }

@@ -1,5 +1,13 @@
 import type { HarmonyPreset, NoteName, ModeName } from "../types/music";
+import type { ChordProgression } from "../types/chords";
 import { computeHarmony } from "../engine/harmony";
+import { frequencyToMidi, midiToFrequency } from "../engine/pitch";
+import { VoiceLeader } from "../engine/voice-leading";
+import { getChordAtBeat } from "../engine/progressions";
+import { getVoiceDelayMs } from "../engine/rhythm";
+import { Transport } from "../engine/transport";
+import { createEffectsChain, type EffectsChain } from "./effects";
+import { createLooper, type Looper } from "./looper";
 import {
   createPitchDetectorNode,
   type PitchCallback,
@@ -26,6 +34,15 @@ export interface AudioPipeline {
   setVoicePan: (index: number, pan: number) => void;
   getAnalyserNode: () => AnalyserNode;
   destroy: () => void;
+  setHarmonyMode: (mode: "interval" | "chord") => void;
+  setChordProgression: (prog: ChordProgression | null) => void;
+  setRhythmPattern: (patternName: string, bpm: number) => void;
+  setReverbMix: (v: number) => void;
+  setDelayTime: (ms: number) => void;
+  setDelayFeedback: (fb: number) => void;
+  setDelayMix: (v: number) => void;
+  getTransport: () => Transport;
+  getLooper: () => Looper;
 }
 
 export async function createAudioPipeline(
@@ -51,10 +68,18 @@ export async function createAudioPipeline(
   const dryGain = context.createGain();
   dryGain.gain.value = 1;
 
-  // Voice paths: shifter → gain → panner
+  // Effects chain (between voices/dry and master)
+  const effectsChain: EffectsChain = createEffectsChain(context);
+
+  // Master gain
+  const masterGain = context.createGain();
+  masterGain.gain.value = 0.8;
+
+  // Voice paths: shifter → gain → panner → delay → effects
   const voiceShifters: AudioWorkletNode[] = [];
   const voiceGains: GainNode[] = [];
   const voicePanners: StereoPannerNode[] = [];
+  const voiceDelays: DelayNode[] = [];
 
   for (let i = 0; i < MAX_VOICES; i++) {
     const shifter = await createPitchShifterNode(context);
@@ -62,60 +87,99 @@ export async function createAudioPipeline(
     gain.gain.value = 0;
     const panner = context.createStereoPanner();
     panner.pan.value = 0;
+    const delay = context.createDelay(2);
+    delay.delayTime.value = 0;
 
     source.connect(shifter);
     shifter.connect(gain);
     gain.connect(panner);
+    panner.connect(delay);
+    delay.connect(effectsChain.input);
 
     voiceShifters.push(shifter);
     voiceGains.push(gain);
     voicePanners.push(panner);
+    voiceDelays.push(delay);
   }
-
-  // Master gain
-  const masterGain = context.createGain();
-  masterGain.gain.value = 0.8;
 
   // Connect graph
   source.connect(analyser);
   source.connect(pitchDetector);
   source.connect(dryGain);
 
-  dryGain.connect(masterGain);
-  for (const panner of voicePanners) {
-    panner.connect(masterGain);
-  }
+  // Dry goes through effects chain too
+  dryGain.connect(effectsChain.input);
+  effectsChain.output.connect(masterGain);
   masterGain.connect(context.destination);
+
+  // Voice leader, transport, looper
+  const voiceLeader = new VoiceLeader(MAX_VOICES);
+  const transport = new Transport();
+  const looper: Looper = createLooper(context);
+  source.connect(looper.getNode());
 
   // Harmony state
   let currentRoot: NoteName = "C";
   let currentMode: ModeName = "major";
   let currentPreset: HarmonyPreset | null = null;
+  let harmonyMode: "interval" | "chord" = "chord";
+  let activeProgression: ChordProgression | null = null;
 
   function applyHarmony(frequency: number) {
-    if (!currentPreset || frequency <= 0) return;
+    if (frequency <= 0) return;
 
-    const result = computeHarmony(
-      frequency,
-      currentRoot,
-      currentMode,
-      currentPreset,
-    );
+    if (harmonyMode === "chord" && activeProgression) {
+      // Chord-aware path
+      const currentChord = getChordAtBeat(
+        activeProgression,
+        transport.getCurrentBeat(),
+      );
+      const sourceMidi = Math.round(frequencyToMidi(frequency));
+      const voiceMidis = voiceLeader.transition(sourceMidi, currentChord);
 
-    for (let i = 0; i < MAX_VOICES; i++) {
-      const shifter = voiceShifters[i];
-      const gain = voiceGains[i];
-      const panner = voicePanners[i];
-      if (!shifter || !gain || !panner) continue;
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
 
-      const voice = result.voices[i];
-      const voiceConfig = currentPreset.voices[i];
-      if (voice && voiceConfig) {
-        setPitchShiftRatio(shifter, voice.ratio);
-        gain.gain.value = voiceConfig.volume;
-        panner.pan.value = voiceConfig.pan;
-      } else {
-        gain.gain.value = 0;
+        const targetMidi = voiceMidis[i];
+        const voiceConfig = currentPreset?.voices[i];
+        if (targetMidi !== undefined && voiceConfig) {
+          const targetFreq = midiToFrequency(targetMidi);
+          setPitchShiftRatio(shifter, targetFreq / frequency);
+          gain.gain.value = voiceConfig.volume;
+          panner.pan.value = voiceConfig.pan;
+        } else {
+          gain.gain.value = 0;
+        }
+      }
+    } else {
+      // Original interval path (MVP behavior)
+      if (!currentPreset) return;
+
+      const result = computeHarmony(
+        frequency,
+        currentRoot,
+        currentMode,
+        currentPreset,
+      );
+
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
+
+        const voice = result.voices[i];
+        const voiceConfig = currentPreset.voices[i];
+        if (voice && voiceConfig) {
+          setPitchShiftRatio(shifter, voice.ratio);
+          gain.gain.value = voiceConfig.volume;
+          panner.pan.value = voiceConfig.pan;
+        } else {
+          gain.gain.value = 0;
+        }
       }
     }
   }
@@ -164,8 +228,34 @@ export async function createAudioPipeline(
     },
     getAnalyserNode: () => analyser,
     destroy: () => {
+      transport.stop();
+      looper.clear();
+      effectsChain.destroy();
       stream.getTracks().forEach((track) => track.stop());
       void context.close();
     },
+    setHarmonyMode: (mode) => {
+      harmonyMode = mode;
+      if (mode === "chord") voiceLeader.reset();
+    },
+    setChordProgression: (prog) => {
+      activeProgression = prog;
+    },
+    setRhythmPattern: (patternName, bpm) => {
+      const delays = getVoiceDelayMs(patternName, bpm);
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const delayNode = voiceDelays[i];
+        const delayMs = delays[i];
+        if (delayNode && delayMs !== undefined) {
+          delayNode.delayTime.value = delayMs / 1000;
+        }
+      }
+    },
+    setReverbMix: (v) => effectsChain.setReverbMix(v),
+    setDelayTime: (ms) => effectsChain.setDelayTime(ms),
+    setDelayFeedback: (fb) => effectsChain.setDelayFeedback(fb),
+    setDelayMix: (v) => effectsChain.setDelayMix(v),
+    getTransport: () => transport,
+    getLooper: () => looper,
   };
 }
