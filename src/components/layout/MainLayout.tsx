@@ -13,6 +13,8 @@ import { TransportBar } from "../ui/TransportBar";
 import { EffectsPanel } from "../ui/EffectsPanel";
 import { LooperControls } from "../ui/LooperControls";
 import { PRESETS } from "../../engine/presets";
+import { COF_PRESETS } from "../../engine/circle-of-fifths";
+import { CofPresetSelector } from "../ui/CofPresetSelector";
 
 export function MainLayout() {
   const {
@@ -24,6 +26,7 @@ export function MainLayout() {
     currentConfidence,
     isListening,
     harmonyMode,
+    cofPresetName,
     setKey,
     setPreset,
     setMasterVolume,
@@ -37,6 +40,7 @@ export function MainLayout() {
   }, [key, presetName, syncSettings]);
 
   const preset = PRESETS[presetName];
+  const cofPreset = COF_PRESETS.find((p) => p.name === cofPresetName);
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
 
   return (
@@ -59,14 +63,20 @@ export function MainLayout() {
 
         {/* Key & Preset + Rhythm Selector */}
         <section className="flex flex-col gap-4">
-          <KeySelector
-            root={key.root}
-            mode={key.mode}
-            onRootChange={(root) => setKey({ ...key, root })}
-            onModeChange={(mode) => setKey({ ...key, mode })}
-          />
-          <PresetSelector value={presetName} onChange={setPreset} />
-          <RhythmSelector />
+          {harmonyMode === "fifths" ? (
+            <CofPresetSelector />
+          ) : (
+            <>
+              <KeySelector
+                root={key.root}
+                mode={key.mode}
+                onRootChange={(root) => setKey({ ...key, root })}
+                onModeChange={(mode) => setKey({ ...key, mode })}
+              />
+              <PresetSelector value={presetName} onChange={setPreset} />
+              <RhythmSelector />
+            </>
+          )}
         </section>
 
         {/* Chord Progression Editor (chord mode only) */}
@@ -85,16 +95,27 @@ export function MainLayout() {
 
         {/* Voice Controls */}
         <section className="flex gap-3 overflow-x-auto pb-2">
-          {preset.voices.map((voice, i) => (
-            <VoiceControl
-              key={i}
-              label={`${voice.interval} ${voice.direction === "up" ? "\u2191" : "\u2193"}`}
-              volume={voice.volume}
-              pan={voice.pan}
-              onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
-              onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
-            />
-          ))}
+          {harmonyMode === "fifths" && cofPreset
+            ? cofPreset.voices.map((voice, i) => (
+                <VoiceControl
+                  key={i}
+                  label={`${voice.steps > 0 ? "+" : ""}${String(voice.steps)} 5th${voice.octaveReduce ? " (oct)" : ""}`}
+                  volume={voice.volume}
+                  pan={voice.pan}
+                  onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
+                  onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
+                />
+              ))
+            : preset.voices.map((voice, i) => (
+                <VoiceControl
+                  key={i}
+                  label={`${voice.interval} ${voice.direction === "up" ? "\u2191" : "\u2193"}`}
+                  volume={voice.volume}
+                  pan={voice.pan}
+                  onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
+                  onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
+                />
+              ))}
           <VoiceControl
             label="Dry"
             volume={dryVolume}

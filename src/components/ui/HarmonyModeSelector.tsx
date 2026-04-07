@@ -1,8 +1,9 @@
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
 
-const MODES: { value: "interval" | "chord"; label: string }[] = [
+const MODES: { value: "interval" | "chord" | "fifths"; label: string }[] = [
   { value: "interval", label: "Interval" },
   { value: "chord", label: "Chord" },
+  { value: "fifths", label: "Circle of 5ths" },
 ];
 
 export function HarmonyModeSelector() {
