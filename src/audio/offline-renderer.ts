@@ -1,13 +1,11 @@
 /**
- * Offline Harmony Renderer
+ * Offline Harmony Renderer v3
  *
- * Processes dry vocal buffer block-by-block (same as live pipeline):
- * 1. Detect pitch per block (YIN)
- * 2. Compute harmony ratios per block (same engine as live)
- * 3. Pitch-shift each block per voice
- * 4. Pan, mix to stereo, apply effects, limit
- *
- * No real-time constraints = no buffer underruns.
+ * Simple approach that works:
+ * 1. Detect pitch per block → get ratio per block
+ * 2. Build a per-sample ratio curve (interpolated between blocks)
+ * 3. Resample input with variable-rate read (ratio changes smoothly)
+ * 4. Mix voices to stereo, apply effects, limit
  */
 
 import { yinDetectPitch } from "./worklets/yin";
@@ -21,212 +19,195 @@ export interface OfflineRenderConfig {
   dryVolume: number;
   voices: OfflineVoiceConfig[];
   reverbMix: number;
-  delayTime: number;      // seconds
+  delayTime: number;
   delayFeedback: number;
   delayMix: number;
   sampleRate: number;
-  /** Called per-block: given detected frequency, returns ratio per voice */
   computeRatios: (frequency: number) => number[];
 }
 
 const BLOCK_SIZE = 2048;
-const CROSSFADE = 64; // samples to crossfade at block boundaries
 
 /**
- * Simple Schroeder reverb (comb filters).
- */
-function applyReverb(input: Float32Array, sampleRate: number, mix: number): Float32Array {
-  if (mix < 0.01) return new Float32Array(input);
-  const delays = [
-    { samples: Math.floor(sampleRate * 0.029), decay: 0.7 },
-    { samples: Math.floor(sampleRate * 0.037), decay: 0.65 },
-    { samples: Math.floor(sampleRate * 0.041), decay: 0.6 },
-    { samples: Math.floor(sampleRate * 0.053), decay: 0.55 },
-  ];
-  const tail = Math.floor(sampleRate * 1.5);
-  const wet = new Float32Array(input.length + tail);
-  for (const { samples, decay } of delays) {
-    const buf = new Float32Array(wet.length);
-    for (let i = 0; i < buf.length; i++) {
-      const inp = i < input.length ? input[i]! : 0;
-      const fb = i >= samples ? (buf[i - samples] ?? 0) * decay : 0;
-      buf[i] = inp + fb;
-    }
-    for (let i = 0; i < wet.length; i++) {
-      wet[i] = (wet[i] ?? 0) + (buf[i] ?? 0) / delays.length;
-    }
-  }
-  const result = new Float32Array(wet.length);
-  for (let i = 0; i < result.length; i++) {
-    const dry = i < input.length ? input[i]! : 0;
-    result[i] = dry * (1 - mix) + (wet[i] ?? 0) * mix;
-  }
-  return result;
-}
-
-/**
- * Delay with feedback.
- */
-function applyDelay(input: Float32Array, delaySamples: number, feedback: number, mix: number): Float32Array {
-  if (mix < 0.01 || delaySamples < 1) return new Float32Array(input);
-  const tail = Math.floor(delaySamples * 3);
-  const output = new Float32Array(input.length + tail);
-  for (let i = 0; i < input.length; i++) output[i] = input[i]!;
-  for (let i = Math.floor(delaySamples); i < output.length; i++) {
-    output[i] = (output[i] ?? 0) + (output[i - Math.floor(delaySamples)] ?? 0) * feedback;
-  }
-  const result = new Float32Array(output.length);
-  for (let i = 0; i < result.length; i++) {
-    const dry = i < input.length ? input[i]! : 0;
-    result[i] = dry * (1 - mix) + (output[i] ?? 0) * mix;
-  }
-  return result;
-}
-
-/**
- * Render dry vocal through harmony voices offline, block-by-block.
+ * Render dry vocal through harmony voices offline.
  */
 export function renderOffline(
   dryBuffer: AudioBuffer,
   config: OfflineRenderConfig,
 ): AudioBuffer {
   const { sampleRate, dryVolume, voices, reverbMix, delayTime, delayFeedback, delayMix, computeRatios } = config;
-  const inputMono = dryBuffer.getChannelData(0);
-  const length = inputMono.length;
+  const input = dryBuffer.getChannelData(0);
+  const length = input.length;
   const numBlocks = Math.ceil(length / BLOCK_SIZE);
+  const numVoices = voices.length;
 
-  // Per-voice: continuous read pointer + output buffer
-  const voiceBuffers: Float32Array[] = voices.map(() => new Float32Array(length));
-  const voiceReadPos: number[] = voices.map(() => 0); // continuous, never reset
-  const voicePrevRatio: number[] = voices.map(() => 1);
+  // ── Step 1: Detect pitch per block, compute ratios ──
+  // ratioMap[block][voice] = ratio for that block
+  const ratioMap: number[][] = [];
 
-  // Linear interpolation read from input at fractional position
-  function readSample(pos: number): number {
-    const i = Math.floor(pos);
-    const f = pos - i;
-    const s0 = i >= 0 && i < length ? inputMono[i]! : 0;
-    const s1 = i + 1 >= 0 && i + 1 < length ? inputMono[i + 1]! : s0;
-    return s0 + f * (s1 - s0);
-  }
-
-  // ── Block-by-block processing ──
   for (let b = 0; b < numBlocks; b++) {
-    const blockStart = b * BLOCK_SIZE;
-    const blockEnd = Math.min(blockStart + BLOCK_SIZE, length);
-    const blockLen = blockEnd - blockStart;
+    const start = b * BLOCK_SIZE;
+    const end = Math.min(start + BLOCK_SIZE, length);
+    const block = input.subarray(start, end);
 
-    // Pitch detection
-    const block = inputMono.subarray(blockStart, blockEnd);
-    const paddedBlock = blockLen < BLOCK_SIZE
+    const padded = block.length < BLOCK_SIZE
       ? (() => { const p = new Float32Array(BLOCK_SIZE); p.set(block); return p; })()
       : block;
-    const { frequency, confidence } = yinDetectPitch(paddedBlock, sampleRate);
+
+    const { frequency, confidence } = yinDetectPitch(padded, sampleRate);
 
     if (confidence > 0.7 && frequency > 0) {
-      const ratios = computeRatios(frequency);
-
-      for (let v = 0; v < voices.length; v++) {
-        const targetRatio = ratios[v] ?? 1;
-        const prevRatio = voicePrevRatio[v] ?? 1;
-
-        for (let i = 0; i < blockLen; i++) {
-          const outIdx = blockStart + i;
-
-          // Smooth ratio transition within block to avoid clicks
-          const t = i / blockLen;
-          const ratio = prevRatio + (targetRatio - prevRatio) * t;
-
-          // Advance continuous read pointer
-          voiceReadPos[v] = (voiceReadPos[v] ?? 0) + ratio;
-          const sample = readSample(voiceReadPos[v] ?? 0);
-
-          // Crossfade at block start to avoid boundary clicks
-          if (i < CROSSFADE && b > 0) {
-            const fade = i / CROSSFADE;
-            voiceBuffers[v]![outIdx] = sample * fade + (voiceBuffers[v]![outIdx] ?? 0) * (1 - fade);
-          } else {
-            voiceBuffers[v]![outIdx] = sample;
-          }
-        }
-
-        voicePrevRatio[v] = targetRatio;
-      }
+      ratioMap.push(computeRatios(frequency));
     } else {
-      // No pitch — fade voices to silence over CROSSFADE samples
-      for (let v = 0; v < voices.length; v++) {
-        for (let i = 0; i < blockLen; i++) {
-          const outIdx = blockStart + i;
-          const fade = i < CROSSFADE ? 1 - i / CROSSFADE : 0;
-          // Keep advancing read pos to stay in sync
-          voiceReadPos[v] = (voiceReadPos[v] ?? 0) + (voicePrevRatio[v] ?? 1);
-          const sample = readSample(voiceReadPos[v] ?? 0);
-          voiceBuffers[v]![outIdx] = sample * fade;
-        }
-      }
+      // No pitch — use ratios of 0 (will produce silence)
+      ratioMap.push(new Array(numVoices).fill(0) as number[]);
     }
   }
 
-  // ── Apply effects per voice, mix to stereo ──
+  // ── Step 2: Per voice, resample with smoothly varying ratio ──
+  const voiceOutputs: Float32Array[] = [];
+
+  for (let v = 0; v < numVoices; v++) {
+    const output = new Float32Array(length);
+    let readPos = 0;
+
+    for (let i = 0; i < length; i++) {
+      // Which block are we in?
+      const blockIdx = Math.floor(i / BLOCK_SIZE);
+      const nextBlockIdx = Math.min(blockIdx + 1, numBlocks - 1);
+
+      // Interpolate ratio between current and next block for smooth transition
+      const blockProgress = (i % BLOCK_SIZE) / BLOCK_SIZE;
+      const r0 = ratioMap[blockIdx]?.[v] ?? 1;
+      const r1 = ratioMap[nextBlockIdx]?.[v] ?? r0;
+      const ratio = r0 + (r1 - r0) * blockProgress;
+
+      // Ratio of 0 = silence (no pitch detected)
+      if (ratio === 0 || Math.abs(ratio) < 0.01) {
+        output[i] = 0;
+        readPos = i + 1; // keep read pos anchored to avoid drift
+        continue;
+      }
+
+      // Read from input at readPos with linear interpolation
+      const intPos = Math.floor(readPos);
+      const frac = readPos - intPos;
+      if (intPos >= 0 && intPos < length) {
+        const s0 = input[intPos]!;
+        const s1 = intPos + 1 < length ? input[intPos + 1]! : s0;
+        output[i] = s0 + frac * (s1 - s0);
+      }
+
+      readPos += ratio;
+
+      // Soft re-anchor: if read pos drifts too far, gently pull back
+      const idealPos = i * ratio;
+      const drift = readPos - idealPos;
+      if (Math.abs(drift) > BLOCK_SIZE) {
+        readPos = idealPos;
+      }
+    }
+
+    voiceOutputs.push(output);
+  }
+
+  // ── Step 3: Mix to stereo ──
   const tailSamples = Math.max(
     delayMix > 0.01 ? Math.floor(delayTime * sampleRate * 3) : 0,
     reverbMix > 0.01 ? Math.floor(sampleRate * 1.5) : 0,
   );
-  const outputLength = length + tailSamples;
-  const left = new Float32Array(outputLength);
-  const right = new Float32Array(outputLength);
+  const outLen = length + tailSamples;
+  const left = new Float32Array(outLen);
+  const right = new Float32Array(outLen);
 
-  // Dry signal (centered)
+  // Dry (centered)
   for (let i = 0; i < length; i++) {
-    const s = inputMono[i]! * dryVolume;
-    left[i] = (left[i] ?? 0) + s;
-    right[i] = (right[i] ?? 0) + s;
+    const s = input[i]! * dryVolume;
+    left[i] = s;
+    right[i] = s;
   }
 
-  // Each voice
-  for (let v = 0; v < voices.length; v++) {
+  // Voices
+  for (let v = 0; v < numVoices; v++) {
     const vc = voices[v]!;
-    let processed: Float32Array = voiceBuffers[v]!;
+    let buf = voiceOutputs[v]!;
 
-    // Effects
-    if (reverbMix > 0.01) processed = applyReverb(processed, sampleRate, reverbMix * 0.4);
-    if (delayMix > 0.01) processed = applyDelay(processed, delayTime * sampleRate, delayFeedback, delayMix * 0.4);
+    // Simple reverb (comb filter sum)
+    if (reverbMix > 0.01) {
+      const reverbDelays = [
+        Math.floor(sampleRate * 0.029),
+        Math.floor(sampleRate * 0.037),
+        Math.floor(sampleRate * 0.043),
+        Math.floor(sampleRate * 0.059),
+      ];
+      const wet = new Float32Array(outLen);
+      for (const d of reverbDelays) {
+        for (let i = d; i < outLen; i++) {
+          const inp = i < buf.length ? (buf[i] ?? 0) : 0;
+          wet[i] = (wet[i] ?? 0) + (inp + (wet[i - d] ?? 0) * 0.6) / reverbDelays.length;
+        }
+      }
+      const mixed = new Float32Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        const dry = i < buf.length ? (buf[i] ?? 0) : 0;
+        mixed[i] = dry * (1 - reverbMix * 0.4) + (wet[i] ?? 0) * reverbMix * 0.4;
+      }
+      buf = mixed;
+    }
 
-    // Constant-power panning
+    // Simple delay
+    if (delayMix > 0.01 && delayTime > 0) {
+      const delaySamples = Math.floor(delayTime * sampleRate);
+      const delayed = new Float32Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        const inp = i < buf.length ? (buf[i] ?? 0) : 0;
+        const fb = i >= delaySamples ? (delayed[i - delaySamples] ?? 0) * delayFeedback : 0;
+        delayed[i] = inp + fb;
+      }
+      const mixed = new Float32Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        mixed[i] = (buf[i] ?? 0) * (1 - delayMix * 0.4) + (delayed[i] ?? 0) * delayMix * 0.4;
+      }
+      buf = mixed;
+    }
+
+    // Pan (constant power)
     const panAngle = ((vc.pan + 1) / 2) * (Math.PI / 2);
     const gainL = Math.cos(panAngle) * vc.volume;
     const gainR = Math.sin(panAngle) * vc.volume;
 
-    for (let i = 0; i < processed.length && i < outputLength; i++) {
-      left[i] = (left[i] ?? 0) + processed[i]! * gainL;
-      right[i] = (right[i] ?? 0) + processed[i]! * gainR;
+    for (let i = 0; i < outLen; i++) {
+      const s = i < buf.length ? (buf[i] ?? 0) : 0;
+      left[i] = (left[i] ?? 0) + s * gainL;
+      right[i] = (right[i] ?? 0) + s * gainR;
     }
   }
 
-  // ── Brick-wall limiter ──
+  // ── Step 4: Brick-wall limiter ──
   let peak = 0;
-  for (let i = 0; i < outputLength; i++) {
+  for (let i = 0; i < outLen; i++) {
     peak = Math.max(peak, Math.abs(left[i] ?? 0), Math.abs(right[i] ?? 0));
   }
-  if (peak > 0.95) {
-    const g = 0.95 / peak;
-    for (let i = 0; i < outputLength; i++) {
+  if (peak > 0.9) {
+    const g = 0.9 / peak;
+    for (let i = 0; i < outLen; i++) {
       left[i] = (left[i] ?? 0) * g;
       right[i] = (right[i] ?? 0) * g;
     }
   }
 
-  // ── Trim silence ──
-  let endSample = outputLength;
-  while (endSample > length && Math.abs(left[endSample - 1] ?? 0) < 0.0001 && Math.abs(right[endSample - 1] ?? 0) < 0.0001) {
-    endSample--;
+  // ── Trim tail ──
+  let end = outLen;
+  while (end > length && Math.abs(left[end - 1] ?? 0) < 0.0001 && Math.abs(right[end - 1] ?? 0) < 0.0001) {
+    end--;
   }
-  endSample = Math.min(endSample + Math.floor(sampleRate * 0.05), outputLength);
+  end = Math.min(end + Math.floor(sampleRate * 0.05), outLen);
 
-  // ── Output stereo buffer ──
-  const ctx = new OfflineAudioContext(2, endSample, sampleRate);
-  const result = ctx.createBuffer(2, endSample, sampleRate);
-  result.getChannelData(0).set(left.subarray(0, endSample));
-  result.getChannelData(1).set(right.subarray(0, endSample));
+  // ── Output ──
+  const ctx = new OfflineAudioContext(2, end, sampleRate);
+  const result = ctx.createBuffer(2, end, sampleRate);
+  result.getChannelData(0).set(left.subarray(0, end));
+  result.getChannelData(1).set(right.subarray(0, end));
 
   return result;
 }
