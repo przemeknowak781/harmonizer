@@ -17,10 +17,10 @@ export interface VoiceState {
 
 function defaultVoiceStates(): VoiceState[] {
   return [
-    { active: true, volume: 0.8, pan: -0.3, octaveShift: -1, cofSteps: 1, cofOctaveReduce: false },
-    { active: true, volume: 0.8, pan: 0.3, octaveShift: -1, cofSteps: -1, cofOctaveReduce: false },
-    { active: true, volume: 0.7, pan: 0, octaveShift: -1, cofSteps: 2, cofOctaveReduce: true },
-    { active: true, volume: 0.6, pan: 0, octaveShift: -2, cofSteps: -2, cofOctaveReduce: true },
+    { active: true, volume: 0.5, pan: -0.3, octaveShift: -1, cofSteps: 1, cofOctaveReduce: false },
+    { active: true, volume: 0.5, pan: 0.3, octaveShift: -1, cofSteps: -1, cofOctaveReduce: false },
+    { active: true, volume: 0.4, pan: 0, octaveShift: -1, cofSteps: 2, cofOctaveReduce: true },
+    { active: true, volume: 0.35, pan: 0, octaveShift: -2, cofSteps: -2, cofOctaveReduce: true },
   ];
 }
 

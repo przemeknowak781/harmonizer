@@ -83,6 +83,14 @@ export async function createAudioPipeline(
   // Effects chain (between voices/dry and master)
   const effectsChain: EffectsChain = createEffectsChain(context);
 
+  // Limiter (DynamicsCompressorNode) to prevent clipping with multiple voices
+  const limiter = context.createDynamicsCompressor();
+  limiter.threshold.value = -6;   // start compressing at -6 dB
+  limiter.knee.value = 6;         // soft knee
+  limiter.ratio.value = 20;       // aggressive ratio = limiter behavior
+  limiter.attack.value = 0.001;   // 1ms attack — catch transients fast
+  limiter.release.value = 0.05;   // 50ms release — smooth recovery
+
   // Master gain
   const masterGain = context.createGain();
   masterGain.gain.value = 0.8;
@@ -122,7 +130,8 @@ export async function createAudioPipeline(
   // Dry goes through effects chain too
   dryGain.connect(effectsChain.input);
   effectsChain.output.connect(masterGain);
-  masterGain.connect(context.destination);
+  masterGain.connect(limiter);
+  limiter.connect(context.destination);
 
   // Voice leader, transport, looper
   const voiceLeader = new VoiceLeader(MAX_VOICES);
