@@ -27,7 +27,7 @@ export function Waveform({ analyser }: WaveformProps) {
     ctx.clearRect(0, 0, width, height);
 
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "#34d399"; // emerald-400
+    ctx.strokeStyle = "#C87533"; // copper accent
     ctx.beginPath();
 
     const sliceWidth = width / bufferLength;
@@ -57,7 +57,8 @@ export function Waveform({ analyser }: WaveformProps) {
       ref={canvasRef}
       width={800}
       height={120}
-      className="w-full h-24 bg-zinc-900 rounded-lg"
+      className="w-full h-24 rounded-xl"
+      style={{ backgroundColor: "var(--surface-alt)" }}
     />
   );
 }

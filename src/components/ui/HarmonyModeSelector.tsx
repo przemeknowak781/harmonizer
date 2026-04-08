@@ -21,8 +21,8 @@ export function HarmonyModeSelector() {
           onClick={() => setHarmonyMode(m.value)}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             harmonyMode === m.value
-              ? "bg-emerald-600 text-white"
-              : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-600"
+              ? "bg-[var(--accent)] text-white"
+              : "bg-[var(--surface-alt)] text-[var(--text-muted)] border border-[var(--border-light)] hover:border-[var(--border)]"
           }`}
         >
           {m.label}

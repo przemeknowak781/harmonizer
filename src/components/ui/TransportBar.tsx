@@ -76,21 +76,21 @@ export function TransportBar({ pipeline }: TransportBarProps) {
         {!isTransportPlaying ? (
           <button
             onClick={handlePlay}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-medium transition-colors"
+            className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium transition-colors"
           >
             Play
           </button>
         ) : (
           <button
             onClick={handlePause}
-            className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-sm font-medium transition-colors"
+            className="px-3 py-1.5 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
           >
             Pause
           </button>
         )}
         <button
           onClick={handleStop}
-          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-sm font-medium transition-colors"
+          className="px-3 py-1.5 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
         >
           Stop
         </button>
@@ -98,7 +98,7 @@ export function TransportBar({ pipeline }: TransportBarProps) {
 
       {/* BPM slider */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-500 uppercase tracking-wider">
+        <span className="text-xs text-[var(--text-light)] uppercase tracking-wider">
           BPM
         </span>
         <input
@@ -108,9 +108,9 @@ export function TransportBar({ pipeline }: TransportBarProps) {
           step={1}
           value={bpm}
           onChange={(e) => handleBpmChange(Number(e.target.value))}
-          className="w-28 accent-emerald-500"
+          className="w-28"
         />
-        <span className="text-sm text-zinc-300 w-8 text-right tabular-nums">
+        <span className="text-sm text-[var(--text)] w-8 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {bpm}
         </span>
       </div>
@@ -122,8 +122,8 @@ export function TransportBar({ pipeline }: TransportBarProps) {
             key={i}
             className={`w-3 h-3 rounded-full transition-colors ${
               i === beatInMeasure && isTransportPlaying
-                ? "bg-emerald-500"
-                : "bg-zinc-700"
+                ? "bg-[var(--accent)]"
+                : "bg-[var(--border-light)]"
             }`}
           />
         ))}

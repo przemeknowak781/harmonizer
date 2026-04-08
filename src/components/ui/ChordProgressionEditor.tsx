@@ -66,13 +66,9 @@ export function ChordProgressionEditor() {
   return (
     <div className="flex flex-col gap-3">
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-zinc-500 uppercase tracking-wider">
-          Chord Progression
-        </span>
         <select
           value={selectedIndex >= 0 ? selectedIndex : ""}
           onChange={handleSelect}
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-white"
         >
           <option value="" disabled>
             Select a progression...
@@ -90,10 +86,10 @@ export function ChordProgressionEditor() {
           {activeProgression.slots.map((slot, i) => (
             <div
               key={i}
-              className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 i === currentSlotIndex
-                  ? "bg-emerald-600 text-white"
-                  : "bg-zinc-800 text-zinc-300 border border-zinc-700"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-alt)] text-[var(--text)] border border-[var(--border-light)]"
               }`}
             >
               {formatChordName(slot.chord)}

@@ -11,8 +11,8 @@ export function CofPresetSelector() {
           onClick={() => setCofPreset(preset.name)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             cofPresetName === preset.name
-              ? "bg-amber-600 text-white"
-              : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-600"
+              ? "bg-[var(--accent)] text-white"
+              : "bg-[var(--surface-alt)] text-[var(--text-muted)] border border-[var(--border-light)] hover:border-[var(--border)]"
           }`}
         >
           {preset.label}
