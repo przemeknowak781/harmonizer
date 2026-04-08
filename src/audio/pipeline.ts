@@ -24,6 +24,7 @@ import {
   octaveReduce,
   type CofPreset,
 } from "../engine/circle-of-fifths";
+import { AdaptiveHarmony } from "../engine/adaptive-harmony";
 import { renderOffline, type OfflineVoiceConfig } from "./offline-renderer";
 
 const MAX_VOICES = 4;
@@ -43,7 +44,7 @@ export interface AudioPipeline {
   setVoicePan: (index: number, pan: number) => void;
   getAnalyserNode: () => AnalyserNode;
   destroy: () => void;
-  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric" | "adaptive") => void;
   setCofPreset: (name: string) => void;
   setChordProgression: (prog: ChordProgression | null) => void;
   setRhythmPattern: (patternName: string, bpm: number) => void;
@@ -242,6 +243,7 @@ export async function createAudioPipeline(
   // Voice leader, transport, looper
   const voiceLeader = new VoiceLeader(MAX_VOICES);
   const melodyAnalyzer = new MelodyAnalyzer();
+  const adaptiveHarmony = new AdaptiveHarmony();
   const transport = new Transport();
   const looper: Looper = createLooper(context);
   source.connect(looper.getNode());
@@ -250,7 +252,7 @@ export async function createAudioPipeline(
   let currentRoot: NoteName = "C";
   let currentMode: ModeName = "major";
   let currentPreset: HarmonyPreset | null = null;
-  let harmonyMode: "interval" | "chord" | "fifths" | "geometric" = "chord";
+  let harmonyMode: "interval" | "chord" | "fifths" | "geometric" | "adaptive" = "chord";
   let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
   let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[] = [];
@@ -367,6 +369,41 @@ export async function createAudioPipeline(
 
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
+
+    if (harmonyMode === "adaptive") {
+      // Count active voices
+      const activeCount = customCofVoices.filter((v) => v.active).length || 2;
+      const result = adaptiveHarmony.compute(frequency, activeCount);
+
+      let voiceIdx = 0;
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
+
+        const cv = customCofVoices[i];
+        const adaptiveVoice = result.voices[voiceIdx];
+
+        if (cv && cv.active && adaptiveVoice) {
+          let ratio = adaptiveVoice.ratio;
+          ratio *= Math.pow(2, cv.octaveShift);
+          while (ratio > maxTransposeRatio) ratio /= 2;
+          while (ratio < minTransposeRatio) ratio *= 2;
+
+          setPitchShiftRatio(shifter, ratio);
+          voiceCurrentRatios[i] = ratio;
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, ratio);
+          smoothGain(gain, cv.volume * formantRolloff(ratio));
+          smoothPan(panner, cv.pan);
+          voiceIdx++;
+        } else {
+          smoothGain(gain, 0);
+        }
+      }
+      return;
+    }
 
     if (harmonyMode === "fifths") {
       // Use customCofVoices directly (no filter!) — index i maps to voiceShifters[i]
@@ -557,6 +594,7 @@ export async function createAudioPipeline(
       harmonyMode = mode;
       if (mode === "chord") voiceLeader.reset();
       if (mode === "geometric") melodyAnalyzer.reset();
+      if (mode === "adaptive") adaptiveHarmony.reset();
     },
     setCofPreset: (name) => {
       const found = COF_PRESETS.find((p) => p.name === name);
@@ -611,7 +649,22 @@ export async function createAudioPipeline(
       const computeRatios = (frequency: number): number[] => {
         const ratios: number[] = [];
 
-        if (harmonyMode === "fifths") {
+        if (harmonyMode === "adaptive") {
+          const result = adaptiveHarmony.compute(frequency, activeIndices.length);
+          for (let v = 0; v < activeIndices.length; v++) {
+            const idx = activeIndices[v]!;
+            const cv = customCofVoices[idx];
+            const av = result.voices[v];
+            if (av && cv) {
+              let r = av.ratio * Math.pow(2, cv.octaveShift);
+              while (r > maxTransposeRatio) r /= 2;
+              while (r < minTransposeRatio) r *= 2;
+              ratios.push(r);
+            } else {
+              ratios.push(1);
+            }
+          }
+        } else if (harmonyMode === "fifths") {
           for (const idx of activeIndices) {
             const cv = customCofVoices[idx];
             if (!cv) { ratios.push(1); continue; }

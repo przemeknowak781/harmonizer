@@ -44,8 +44,9 @@ export function MainLayout() {
           <option value="chord">Chord</option>
           <option value="fifths">Circle of 5ths</option>
           <option value="geometric">Geometric JI</option>
+          <option value="adaptive">Adaptive</option>
         </select>
-        {harmonyMode !== "fifths" && harmonyMode !== "geometric" && (
+        {harmonyMode !== "fifths" && harmonyMode !== "geometric" && harmonyMode !== "adaptive" && (
           <>
             <div className="h-3 w-px bg-[var(--border)]" />
             <KeySelector root={key.root} mode={key.mode}
@@ -100,7 +101,11 @@ export function MainLayout() {
 
           {/* Config strip — below pitch, always visible */}
           <div className="shrink-0 px-3 py-2 bg-[var(--surface)] border-t border-[var(--border-light)] flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "45%" }}>
-            {harmonyMode === "fifths" ? (
+            {harmonyMode === "adaptive" ? (
+              <div className="text-[10px] text-[var(--text-dim)] italic py-1">
+                Adaptive mode — harmony follows your melody automatically
+              </div>
+            ) : harmonyMode === "fifths" ? (
               <CofPresetSelector />
             ) : harmonyMode !== "geometric" ? (
               <>

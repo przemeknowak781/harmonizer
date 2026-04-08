@@ -32,7 +32,7 @@ interface HarmonizerState {
   isListening: boolean;
   currentPitch: number | null;
   currentConfidence: number;
-  harmonyMode: "interval" | "chord" | "fifths" | "geometric";
+  harmonyMode: "interval" | "chord" | "fifths" | "geometric" | "adaptive";
   cofPresetName: string;
   rhythmPattern: string;
   reverbMix: number;
@@ -62,7 +62,7 @@ interface HarmonizerState {
   setDryVolume: (v: number) => void;
   setListening: (listening: boolean) => void;
   setPitch: (frequency: number | null, confidence: number) => void;
-  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric" | "adaptive") => void;
   setCofPreset: (name: string) => void;
   setRhythmPattern: (pattern: string) => void;
   setReverbMix: (v: number) => void;
