@@ -91,6 +91,11 @@ describe("harmonizer store", () => {
     expect(useHarmonizerStore.getState().cofPresetName).toBe("mirror");
   });
 
+  it("harmonyMode accepts geometric", () => {
+    useHarmonizerStore.getState().setHarmonyMode("geometric");
+    expect(useHarmonizerStore.getState().harmonyMode).toBe("geometric");
+  });
+
   it("setBpm clamps to 30–300", () => {
     useHarmonizerStore.getState().setBpm(10);
     expect(useHarmonizerStore.getState().bpm).toBe(30);

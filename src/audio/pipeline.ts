@@ -1,5 +1,6 @@
 import type { HarmonyPreset, NoteName, ModeName } from "../types/music";
-import type { ChordProgression } from "../types/chords";
+import type { ChordProgression, ChordQuality } from "../types/chords";
+import { computeGeometricHarmony } from "../engine/geometric-harmony";
 import { computeHarmony } from "../engine/harmony";
 import { frequencyToMidi, midiToFrequency } from "../engine/pitch";
 import { VoiceLeader } from "../engine/voice-leading";
@@ -39,7 +40,7 @@ export interface AudioPipeline {
   setVoicePan: (index: number, pan: number) => void;
   getAnalyserNode: () => AnalyserNode;
   destroy: () => void;
-  setHarmonyMode: (mode: "interval" | "chord" | "fifths") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric") => void;
   setCofPreset: (name: string) => void;
   setChordProgression: (prog: ChordProgression | null) => void;
   setRhythmPattern: (patternName: string, bpm: number) => void;
@@ -128,7 +129,7 @@ export async function createAudioPipeline(
   let currentRoot: NoteName = "C";
   let currentMode: ModeName = "major";
   let currentPreset: HarmonyPreset | null = null;
-  let harmonyMode: "interval" | "chord" | "fifths" = "chord";
+  let harmonyMode: "interval" | "chord" | "fifths" | "geometric" = "chord";
   let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
 
@@ -149,6 +150,40 @@ export async function createAudioPipeline(
           setPitchShiftRatio(shifter, voice.ratio);
           gain.gain.value = voiceConfig.volume;
           panner.pan.value = voiceConfig.pan;
+        } else {
+          gain.gain.value = 0;
+        }
+      }
+      return;
+    }
+
+    if (harmonyMode === "geometric") {
+      // Get chord quality from progression (or default to major)
+      let quality: ChordQuality = "major";
+      if (activeProgression) {
+        const currentChord = getChordAtBeat(
+          activeProgression,
+          transport.getCurrentBeat(),
+        );
+        quality = currentChord.quality;
+      }
+
+      // Pure geometric harmony — no MIDI, no quantization
+      const result = computeGeometricHarmony(frequency, quality, MAX_VOICES);
+
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
+
+        const voice = result.voices[i];
+        if (voice) {
+          setPitchShiftRatio(shifter, voice.ratio);
+          gain.gain.value = 0.75;
+          // Spread voices across stereo field
+          panner.pan.value =
+            i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
         } else {
           gain.gain.value = 0;
         }
