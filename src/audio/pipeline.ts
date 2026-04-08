@@ -181,8 +181,8 @@ export async function createAudioPipeline(
   let smoothFadeEnabled = true;
   let fadeTimeSec = 0.1;      // 100ms default
   let portamentoEnabled = true;
-  let portamentoTimeSec = 0.06; // 60ms default
-  let jitterGateCents = 5;     // 5 cents default
+  let _portamentoTimeSec = 0.06; // stored for UI, glide uses fixed alpha
+  let _jitterGateCents = 5;     // stored for UI
 
   /** Set gain — direct assignment, optionally with simple ramp. */
   function smoothGain(gainNode: GainNode, target: number): void {
@@ -495,8 +495,8 @@ export async function createAudioPipeline(
       smoothFadeEnabled = config.fadeEnabled;
       fadeTimeSec = config.fadeMs / 1000;
       portamentoEnabled = config.portamentoEnabled;
-      portamentoTimeSec = config.portamentoMs / 1000;
-      jitterGateCents = config.jitterCents;
+      _portamentoTimeSec = config.portamentoMs / 1000;
+      _jitterGateCents = config.jitterCents;
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),
