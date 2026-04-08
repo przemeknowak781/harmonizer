@@ -58,7 +58,7 @@ export function Waveform({ analyser }: WaveformProps) {
       width={600}
       height={80}
       className="w-full h-16 rounded-lg"
-      style={{ backgroundColor: "var(--surface-alt)" }}
+      style={{ backgroundColor: "var(--surface-sunken)" }}
     />
   );
 }

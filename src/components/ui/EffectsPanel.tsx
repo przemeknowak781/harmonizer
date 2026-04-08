@@ -39,10 +39,10 @@ export function EffectsPanel({ pipeline }: EffectsPanelProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       {/* Reverb */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--text-muted)] w-20">Reverb</span>
+        <span className="text-xs text-[var(--text-mid)] w-20">Reverb</span>
         <input
           type="range"
           min={0}
@@ -52,14 +52,14 @@ export function EffectsPanel({ pipeline }: EffectsPanelProps) {
           onChange={(e) => updateReverb(Number(e.target.value))}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {Math.round(reverbMix * 100)}%
         </span>
       </div>
 
       {/* Delay Time */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--text-muted)] w-20">Delay</span>
+        <span className="text-xs text-[var(--text-mid)] w-20">Delay</span>
         <input
           type="range"
           min={0}
@@ -69,14 +69,14 @@ export function EffectsPanel({ pipeline }: EffectsPanelProps) {
           onChange={(e) => updateDelayTime(Number(e.target.value))}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {delayTime}ms
         </span>
       </div>
 
       {/* Delay Feedback */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--text-muted)] w-20">Feedback</span>
+        <span className="text-xs text-[var(--text-mid)] w-20">Feedback</span>
         <input
           type="range"
           min={0}
@@ -86,14 +86,14 @@ export function EffectsPanel({ pipeline }: EffectsPanelProps) {
           onChange={(e) => updateDelayFeedback(Number(e.target.value))}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {Math.round(delayFeedback * 100)}%
         </span>
       </div>
 
       {/* Delay Mix */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--text-muted)] w-20">Delay Mix</span>
+        <span className="text-xs text-[var(--text-mid)] w-20">Delay Mix</span>
         <input
           type="range"
           min={0}
@@ -103,7 +103,7 @@ export function EffectsPanel({ pipeline }: EffectsPanelProps) {
           onChange={(e) => updateDelayMix(Number(e.target.value))}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-12 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {Math.round(delayMix * 100)}%
         </span>
       </div>

@@ -32,7 +32,7 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
   } = useHarmonizerStore();
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {/* Fade toggle + slider */}
       <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 min-w-24">
@@ -44,7 +44,7 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
               syncSmoothToPipeline(pipeline);
             }}
           />
-          <span className="text-xs text-[var(--text-muted)]">Fade</span>
+          <span className="text-xs text-[var(--text-mid)]">Fade</span>
         </label>
         <input
           type="range"
@@ -59,7 +59,7 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
           }}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {String(fadeTimeMs)} ms
         </span>
       </div>
@@ -75,7 +75,7 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
               syncSmoothToPipeline(pipeline);
             }}
           />
-          <span className="text-xs text-[var(--text-muted)]">Legato</span>
+          <span className="text-xs text-[var(--text-mid)]">Legato</span>
         </label>
         <input
           type="range"
@@ -90,14 +90,14 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
           }}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {String(portamentoTimeMs)} ms
         </span>
       </div>
 
       {/* Jitter gate slider */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-[var(--text-muted)] min-w-24">Jitter Gate</span>
+        <span className="text-xs text-[var(--text-mid)] min-w-24">Jitter Gate</span>
         <input
           type="range"
           min={0}
@@ -111,7 +111,7 @@ export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
           }}
           className="flex-1"
         />
-        <span className="text-xs text-[var(--text-light)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <span className="text-xs text-[var(--text-dim)] w-14 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           {String(jitterGateCents)} &cent;
         </span>
       </div>

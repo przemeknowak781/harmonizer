@@ -43,7 +43,7 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
         {looperState === "empty" && (
           <button
             onClick={handleRecord}
-            className="px-4 py-2 bg-[var(--danger)] hover:bg-[var(--danger-hover)] text-white rounded-lg text-sm font-medium transition-colors"
+            className="px-3 py-1 bg-[var(--red)] hover:bg-[var(--red-dim)] text-white rounded-lg text-xs font-medium transition-colors"
           >
             Record
           </button>
@@ -51,11 +51,11 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
 
         {looperState === "recording" && (
           <>
-            <div className="w-3 h-3 rounded-full bg-[var(--danger)] animate-pulse" />
-            <span className="text-sm text-[var(--danger)]">Recording...</span>
+            <div className="w-3 h-3 rounded-full bg-[var(--red)] animate-pulse" />
+            <span className="text-sm text-[var(--red)]">Recording...</span>
             <button
               onClick={handleStop}
-              className="px-4 py-2 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
             >
               Stop
             </button>
@@ -66,19 +66,19 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
           <>
             <button
               onClick={handleStop}
-              className="px-4 py-2 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
             >
               Stop
             </button>
             <button
               onClick={handleOverdub}
-              className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 bg-[var(--accent)] hover:bg-[var(--accent-dim)] text-white rounded-lg text-xs font-medium transition-colors"
             >
               Overdub
             </button>
             <button
               onClick={handleClear}
-              className="px-4 py-2 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text-muted)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text-mid)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
             >
               Clear
             </button>
@@ -91,7 +91,7 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
             <span className="text-sm text-[var(--accent)]">Overdubbing...</span>
             <button
               onClick={handleStop}
-              className="px-4 py-2 bg-[var(--surface-alt)] hover:bg-[var(--border-light)] text-[var(--text)] border border-[var(--border-light)] rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
             >
               Stop
             </button>

@@ -19,10 +19,10 @@ export function HarmonyModeSelector() {
         <button
           key={m.value}
           onClick={() => setHarmonyMode(m.value)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
             harmonyMode === m.value
               ? "bg-[var(--accent)] text-white"
-              : "bg-[var(--surface-alt)] text-[var(--text-muted)] border border-[var(--border-light)] hover:border-[var(--border)]"
+              : "bg-[var(--surface-raised)] text-[var(--text-mid)] border border-[var(--border)] hover:border-[var(--border)]"
           }`}
         >
           {m.label}

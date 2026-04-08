@@ -47,11 +47,10 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
           ({ index, volume, pan, octaveShift, cofSteps, cofOctaveReduce }) => (
             <div
               key={index}
-              className="flex flex-col gap-1.5 p-2 bg-[var(--surface-alt)] rounded-lg border border-[var(--border-light)] min-w-28"
-              style={{ boxShadow: "var(--shadow)" }}
+              className="flex flex-col gap-1 p-1.5 bg-[var(--surface-raised)] rounded-lg border border-[var(--border)] min-w-24"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                <span className="text-xs font-medium text-[var(--text-mid)] uppercase tracking-wider">
                   {harmonyMode === "fifths"
                     ? `${cofSteps > 0 ? "+" : ""}${String(cofSteps)} 5th`
                     : `Voice ${String(index + 1)}`}
@@ -62,7 +61,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                     pipeline.current?.setVoiceVolume(index, 0);
                     syncVoicesToPipeline(pipeline);
                   }}
-                  className="text-[var(--text-light)] hover:text-[var(--danger)] text-xs transition-colors"
+                  className="text-[var(--text-dim)] hover:text-[var(--red)] text-xs transition-colors"
                 >
                   ✕
                 </button>
@@ -76,7 +75,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                       setVoiceCofSteps(index, cofSteps - 1);
                       syncVoicesToPipeline(pipeline);
                     }}
-                    className="w-6 h-6 rounded bg-[var(--surface-alt)] text-[var(--text-muted)] hover:bg-[var(--border-light)] text-xs transition-colors"
+                    className="w-6 h-6 rounded bg-[var(--surface-raised)] text-[var(--text-mid)] hover:bg-[var(--border)] text-xs transition-colors"
                   >
                     -
                   </button>
@@ -89,11 +88,11 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                       setVoiceCofSteps(index, cofSteps + 1);
                       syncVoicesToPipeline(pipeline);
                     }}
-                    className="w-6 h-6 rounded bg-[var(--surface-alt)] text-[var(--text-muted)] hover:bg-[var(--border-light)] text-xs transition-colors"
+                    className="w-6 h-6 rounded bg-[var(--surface-raised)] text-[var(--text-mid)] hover:bg-[var(--border)] text-xs transition-colors"
                   >
                     +
                   </button>
-                  <label className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                  <label className="flex items-center gap-1 text-xs text-[var(--text-mid)]">
                     <input
                       type="checkbox"
                       checked={cofOctaveReduce}
@@ -110,8 +109,8 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
               {/* Octave Shift — all modes */}
               <label className="flex flex-col gap-1">
                 <div className="flex justify-between">
-                  <span className="text-xs text-[var(--text-light)]">Octave</span>
-                  <span className="text-xs text-[var(--text-muted)]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span className="text-xs text-[var(--text-dim)]">Octave</span>
+                  <span className="text-xs text-[var(--text-mid)]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                     {octaveShift > 0 ? "+" : ""}{String(octaveShift)}
                   </span>
                 </div>
@@ -131,7 +130,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
 
               {/* Volume */}
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--text-light)]">Vol</span>
+                <span className="text-xs text-[var(--text-dim)]">Vol</span>
                 <input
                   type="range"
                   min={0}
@@ -149,7 +148,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
 
               {/* Pan */}
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--text-light)]">Pan</span>
+                <span className="text-xs text-[var(--text-dim)]">Pan</span>
                 <input
                   type="range"
                   min={-1}
@@ -169,12 +168,12 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
         )}
 
         {/* Dry voice */}
-        <div className="flex flex-col gap-1.5 p-2 bg-[var(--surface-alt)] rounded-lg border border-[var(--border-light)] min-w-28" style={{ boxShadow: "var(--shadow)" }}>
-          <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+        <div className="flex flex-col gap-1 p-1.5 bg-[var(--surface-raised)] rounded-lg border border-[var(--border)] min-w-24">
+          <span className="text-xs font-medium text-[var(--text-mid)] uppercase tracking-wider">
             Dry
           </span>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-[var(--text-light)]">Vol</span>
+            <span className="text-xs text-[var(--text-dim)]">Vol</span>
             <input
               type="range"
               min={0}
@@ -199,7 +198,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
             addVoice();
             syncVoicesToPipeline(pipeline);
           }}
-          className="self-start px-4 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface)] text-[var(--text-muted)] border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+          className="self-start px-4 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface)] text-[var(--text-mid)] border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
         >
           + Add Voice
         </button>

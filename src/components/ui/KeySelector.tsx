@@ -21,7 +21,7 @@ export function KeySelector({ root, mode, onRootChange, onModeChange }: KeySelec
   return (
     <div className="flex gap-3 items-center">
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-[var(--text-light)] uppercase tracking-wider">Key</span>
+        <span className="text-xs text-[var(--text-dim)] uppercase tracking-wider">Key</span>
         <select
           value={root}
           onChange={(e) => onRootChange(e.target.value as NoteName)}
@@ -33,7 +33,7 @@ export function KeySelector({ root, mode, onRootChange, onModeChange }: KeySelec
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-[var(--text-light)] uppercase tracking-wider">Mode</span>
+        <span className="text-xs text-[var(--text-dim)] uppercase tracking-wider">Mode</span>
         <select
           value={mode}
           onChange={(e) => onModeChange(e.target.value as ModeName)}
