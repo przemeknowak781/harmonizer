@@ -181,8 +181,7 @@ export async function createAudioPipeline(
   let smoothFadeEnabled = true;
   let fadeTimeSec = 0.1;      // 100ms default
   let portamentoEnabled = true;
-  let _portamentoTimeSec = 0.06; // stored for UI, glide uses fixed alpha
-  let _jitterGateCents = 5;     // stored for UI
+  // portamentoTimeMs and jitterGateCents stored in setSmoothConfig for UI round-trip
 
   /** Set gain — direct assignment, optionally with simple ramp. */
   function smoothGain(gainNode: GainNode, target: number): void {
@@ -389,6 +388,23 @@ export async function createAudioPipeline(
         currentPreset,
       );
 
+      // DEBUG: log once every ~2 seconds
+      if (Math.random() < 0.02) {
+        console.log("[harmony]", {
+          mode: harmonyMode,
+          freq: frequency.toFixed(1),
+          voices: result.voices.map((v, idx) => {
+            const gp = getVoiceState(idx, 0, 0);
+            return {
+              engineRatio: v.ratio.toFixed(3),
+              octShift: gp.octaveShift,
+              finalRatio: applyOctaveShift(v.ratio, gp.octaveShift).toFixed(3),
+              vol: gp.volume.toFixed(2),
+            };
+          }),
+        });
+      }
+
       for (let i = 0; i < MAX_VOICES; i++) {
         const shifter = voiceShifters[i];
         const gain = voiceGains[i];
@@ -495,8 +511,7 @@ export async function createAudioPipeline(
       smoothFadeEnabled = config.fadeEnabled;
       fadeTimeSec = config.fadeMs / 1000;
       portamentoEnabled = config.portamentoEnabled;
-      _portamentoTimeSec = config.portamentoMs / 1000;
-      _jitterGateCents = config.jitterCents;
+      // portamentoMs and jitterCents stored in store, used by smoothRatio alpha
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),
