@@ -79,7 +79,25 @@ export async function createAudioPipeline(
     },
   });
 
-  const source = context.createMediaStreamSource(stream);
+  const rawSource = context.createMediaStreamSource(stream);
+
+  // ── Input normalizer: compressor to tame hot mic signals ──
+  const inputCompressor = context.createDynamicsCompressor();
+  inputCompressor.threshold.value = -24;  // start compressing at -24 dB
+  inputCompressor.knee.value = 12;        // wide soft knee
+  inputCompressor.ratio.value = 4;        // 4:1 compression
+  inputCompressor.attack.value = 0.003;   // 3ms attack
+  inputCompressor.release.value = 0.15;   // 150ms release
+
+  const inputGain = context.createGain();
+  inputGain.gain.value = 0.8; // slight reduction after compression
+
+  rawSource.connect(inputCompressor);
+  inputCompressor.connect(inputGain);
+
+  // "source" is now the normalized signal
+  const source = inputGain;
+
   const analyser = context.createAnalyser();
   analyser.fftSize = 2048;
 

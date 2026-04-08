@@ -30,29 +30,7 @@ export interface OfflineRenderConfig {
 }
 
 const BLOCK_SIZE = 2048;
-
-/**
- * Pitch-shift one block by a ratio using linear interpolation.
- */
-function shiftBlock(
-  input: Float32Array,
-  offset: number,
-  blockLen: number,
-  ratio: number,
-  output: Float32Array,
-  outOffset: number,
-): void {
-  for (let i = 0; i < blockLen; i++) {
-    const readPos = offset + i * ratio;
-    const intPos = Math.floor(readPos);
-    const frac = readPos - intPos;
-    const s0 = intPos >= 0 && intPos < input.length ? input[intPos]! : 0;
-    const s1 = intPos + 1 >= 0 && intPos + 1 < input.length ? input[intPos + 1]! : s0;
-    if (outOffset + i < output.length) {
-      output[outOffset + i] = s0 + frac * (s1 - s0);
-    }
-  }
-}
+const CROSSFADE = 64; // samples to crossfade at block boundaries
 
 /**
  * Simple Schroeder reverb (comb filters).
@@ -117,48 +95,72 @@ export function renderOffline(
   const length = inputMono.length;
   const numBlocks = Math.ceil(length / BLOCK_SIZE);
 
-  // Per-voice mono output buffers (same length as input)
+  // Per-voice: continuous read pointer + output buffer
   const voiceBuffers: Float32Array[] = voices.map(() => new Float32Array(length));
+  const voiceReadPos: number[] = voices.map(() => 0); // continuous, never reset
+  const voicePrevRatio: number[] = voices.map(() => 1);
 
-  // ── Block-by-block: detect pitch → compute ratios → shift ──
+  // Linear interpolation read from input at fractional position
+  function readSample(pos: number): number {
+    const i = Math.floor(pos);
+    const f = pos - i;
+    const s0 = i >= 0 && i < length ? inputMono[i]! : 0;
+    const s1 = i + 1 >= 0 && i + 1 < length ? inputMono[i + 1]! : s0;
+    return s0 + f * (s1 - s0);
+  }
+
+  // ── Block-by-block processing ──
   for (let b = 0; b < numBlocks; b++) {
     const blockStart = b * BLOCK_SIZE;
     const blockEnd = Math.min(blockStart + BLOCK_SIZE, length);
     const blockLen = blockEnd - blockStart;
 
-    // Extract block for pitch detection
+    // Pitch detection
     const block = inputMono.subarray(blockStart, blockEnd);
-
-    // Pad to BLOCK_SIZE if last block is short
     const paddedBlock = blockLen < BLOCK_SIZE
       ? (() => { const p = new Float32Array(BLOCK_SIZE); p.set(block); return p; })()
       : block;
-
-    // Detect pitch
     const { frequency, confidence } = yinDetectPitch(paddedBlock, sampleRate);
 
-    // Only harmonize if pitch is confident
     if (confidence > 0.7 && frequency > 0) {
-      // Get ratios from the SAME harmony engine as live
       const ratios = computeRatios(frequency);
 
-      // Pitch-shift this block for each voice
       for (let v = 0; v < voices.length; v++) {
-        const ratio = ratios[v];
-        if (ratio !== undefined && Math.abs(ratio - 1) > 0.001) {
-          shiftBlock(inputMono, blockStart, blockLen, ratio, voiceBuffers[v]!, blockStart);
-        } else {
-          // Unison or no ratio — copy dry
-          for (let i = 0; i < blockLen; i++) {
-            voiceBuffers[v]![blockStart + i] = inputMono[blockStart + i]!;
+        const targetRatio = ratios[v] ?? 1;
+        const prevRatio = voicePrevRatio[v] ?? 1;
+
+        for (let i = 0; i < blockLen; i++) {
+          const outIdx = blockStart + i;
+
+          // Smooth ratio transition within block to avoid clicks
+          const t = i / blockLen;
+          const ratio = prevRatio + (targetRatio - prevRatio) * t;
+
+          // Advance continuous read pointer
+          voiceReadPos[v] = (voiceReadPos[v] ?? 0) + ratio;
+          const sample = readSample(voiceReadPos[v] ?? 0);
+
+          // Crossfade at block start to avoid boundary clicks
+          if (i < CROSSFADE && b > 0) {
+            const fade = i / CROSSFADE;
+            voiceBuffers[v]![outIdx] = sample * fade + (voiceBuffers[v]![outIdx] ?? 0) * (1 - fade);
+          } else {
+            voiceBuffers[v]![outIdx] = sample;
           }
         }
+
+        voicePrevRatio[v] = targetRatio;
       }
     } else {
-      // No pitch — silence voices for this block (avoid artifacts)
+      // No pitch — fade voices to silence over CROSSFADE samples
       for (let v = 0; v < voices.length; v++) {
         for (let i = 0; i < blockLen; i++) {
-          voiceBuffers[v]![blockStart + i] = 0;
+          const outIdx = blockStart + i;
+          const fade = i < CROSSFADE ? 1 - i / CROSSFADE : 0;
+          // Keep advancing read pos to stay in sync
+          voiceReadPos[v] = (voiceReadPos[v] ?? 0) + (voicePrevRatio[v] ?? 1);
+          const sample = readSample(voiceReadPos[v] ?? 0);
+          voiceBuffers[v]![outIdx] = sample * fade;
         }
       }
     }
