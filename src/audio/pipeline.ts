@@ -63,6 +63,8 @@ export interface AudioPipeline {
   }) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
+  /** Get live pitch ratios per voice (updated every frame). */
+  getVoiceRatios: () => number[];
   /** Render a dry recording through all voices offline. Returns stereo mixdown. */
   renderRecording: (dryBuffer: AudioBuffer) => AudioBuffer;
 }
@@ -591,6 +593,7 @@ export async function createAudioPipeline(
     setDelayMix: (v) => effectsChain.setDelayMix(v),
     getTransport: () => transport,
     getLooper: () => looper,
+    getVoiceRatios: () => [...voiceCurrentRatios],
     renderRecording: (dryBuffer: AudioBuffer): AudioBuffer => {
       // Collect active voice configs (volume/pan only — ratio computed per-block)
       const offlineVoices: OfflineVoiceConfig[] = [];

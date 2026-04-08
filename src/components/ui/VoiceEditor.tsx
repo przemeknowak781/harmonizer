@@ -1,8 +1,35 @@
+import { useState, useEffect } from "react";
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
 import type { MutableRefObject } from "react";
 import type { AudioPipeline } from "../../audio/pipeline";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
+
+/** Convert a pitch ratio to a human-readable interval name + cents deviation. */
+function ratioToInterval(ratio: number): { name: string; cents: number; chipmunk: boolean } {
+  if (ratio <= 0 || Math.abs(ratio - 1) < 0.001) return { name: "—", cents: 0, chipmunk: false };
+
+  const semitones = 12 * Math.log2(ratio);
+  const absSemitones = Math.abs(semitones);
+  const direction = semitones > 0 ? "+" : "-";
+  const nearestSemitone = Math.round(absSemitones);
+  const cents = Math.round((absSemitones - nearestSemitone) * 100);
+
+  const NAMES: Record<number, string> = {
+    0: "uni", 1: "m2", 2: "M2", 3: "m3", 4: "M3", 5: "P4",
+    6: "tri", 7: "P5", 8: "m6", 9: "M6", 10: "m7", 11: "M7", 12: "8va",
+    13: "m9", 14: "M9", 15: "m10", 16: "M10", 17: "P11", 19: "P12", 24: "2×8va",
+  };
+
+  const name = NAMES[nearestSemitone] ?? `${nearestSemitone}st`;
+  const chipmunk = absSemitones > 14; // more than a 9th = likely chipmunk territory
+
+  return {
+    name: `${direction}${name}${cents > 3 ? ` ${cents > 0 ? "+" : ""}${cents}¢` : ""}`,
+    cents,
+    chipmunk,
+  };
+}
 
 interface VoiceEditorProps {
   pipeline: MutableRefObject<AudioPipeline | null>;
@@ -32,6 +59,16 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
     addVoice, removeVoice, setDryVolume,
   } = useHarmonizerStore();
 
+  // Poll live voice ratios from pipeline (~4Hz, cheap)
+  const [liveRatios, setLiveRatios] = useState<number[]>([1, 1, 1, 1]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ratios = pipeline.current?.getVoiceRatios();
+      if (ratios) setLiveRatios(ratios);
+    }, 250);
+    return () => clearInterval(id);
+  }, [pipeline]);
+
   const activeVoices = voiceStates
     .map((v, i) => ({ ...v, index: i }))
     .filter((v) => v.active);
@@ -43,6 +80,21 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
       {activeVoices.map(({ index, volume, pan, octaveShift, cofSteps, cofOctaveReduce }) => (
         <div key={index} className="flex flex-col gap-1 bg-[var(--surface-raised)] rounded-lg p-2">
           {/* Header: label + octave buttons + remove */}
+          {/* Interval badge */}
+          {(() => {
+            const info = ratioToInterval(liveRatios[index] ?? 1);
+            return info.name !== "—" ? (
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                info.chipmunk
+                  ? "bg-[var(--red)] bg-opacity-20 text-[var(--red)]"
+                  : "bg-[var(--amber)] bg-opacity-10 text-[var(--amber)]"
+              }`} style={mono}>
+                <span>{info.name}</span>
+                {info.chipmunk && <span title="Chipmunk zone — consider lowering octave">🐿</span>}
+              </div>
+            ) : null;
+          })()}
+
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-bold text-[var(--amber)] w-6" style={mono}>
               {harmonyMode === "fifths"
