@@ -1,8 +1,9 @@
 import type { HarmonyPreset, NoteName, ModeName } from "../types/music";
-import type { ChordProgression, ChordQuality } from "../types/chords";
+import type { ChordProgression } from "../types/chords";
 import { computeGeometricHarmony } from "../engine/geometric-harmony";
 import { computeHarmony } from "../engine/harmony";
 import { frequencyToMidi, midiToFrequency } from "../engine/pitch";
+import { MelodyAnalyzer } from "../engine/melody-analyzer";
 import { VoiceLeader } from "../engine/voice-leading";
 import { getChordAtBeat } from "../engine/progressions";
 import { getVoiceDelayMs } from "../engine/rhythm";
@@ -50,6 +51,7 @@ export interface AudioPipeline {
   setDelayFeedback: (fb: number) => void;
   setDelayMix: (v: number) => void;
   setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[]) => void;
+  setMaxTransposeRatio: (ratio: number) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
 }
@@ -123,6 +125,7 @@ export async function createAudioPipeline(
 
   // Voice leader, transport, looper
   const voiceLeader = new VoiceLeader(MAX_VOICES);
+  const melodyAnalyzer = new MelodyAnalyzer();
   const transport = new Transport();
   const looper: Looper = createLooper(context);
   source.connect(looper.getNode());
@@ -157,9 +160,21 @@ export async function createAudioPipeline(
     return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
   }
 
-  /** Apply octave shift to a ratio: ratio × 2^shift */
+  let maxTransposeRatio = 4; // default: 2 octaves up
+
+  /** Apply octave shift to a ratio, then clamp by folding down octaves. */
   function applyOctaveShift(ratio: number, shift: number): number {
-    return ratio * Math.pow(2, shift);
+    let r = ratio * Math.pow(2, shift);
+    // If ratio exceeds max, fold down by octaves until within limit
+    while (r > maxTransposeRatio && r > 1) {
+      r /= 2;
+    }
+    // Same for below: if ratio is too low (below 1/maxTransposeRatio), fold up
+    const minRatio = 1 / maxTransposeRatio;
+    while (r < minRatio && r < 1) {
+      r *= 2;
+    }
+    return r;
   }
 
   function applyHarmony(frequency: number) {
@@ -192,14 +207,8 @@ export async function createAudioPipeline(
     }
 
     if (harmonyMode === "geometric") {
-      let quality: ChordQuality = "major";
-      if (activeProgression) {
-        const currentChord = getChordAtBeat(
-          activeProgression,
-          transport.getCurrentBeat(),
-        );
-        quality = currentChord.quality;
-      }
+      // Auto-detect chord quality from melody — no progression needed
+      const quality = melodyAnalyzer.addPitch(frequency);
 
       const result = computeGeometricHarmony(frequency, quality, MAX_VOICES);
 
@@ -333,6 +342,7 @@ export async function createAudioPipeline(
     setHarmonyMode: (mode) => {
       harmonyMode = mode;
       if (mode === "chord") voiceLeader.reset();
+      if (mode === "geometric") melodyAnalyzer.reset();
     },
     setCofPreset: (name) => {
       const found = COF_PRESETS.find((p) => p.name === name);
@@ -353,6 +363,9 @@ export async function createAudioPipeline(
     },
     setCustomCofVoices: (voices) => {
       customCofVoices = voices;
+    },
+    setMaxTransposeRatio: (ratio) => {
+      maxTransposeRatio = Math.max(1, Math.min(8, ratio));
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),

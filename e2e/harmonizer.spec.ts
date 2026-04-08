@@ -89,4 +89,41 @@ test.describe("Harmonizer", () => {
     await page.getByRole("button", { name: "Interval" }).click();
     await expect(page.getByText("Chord Progression")).not.toBeVisible();
   });
+
+  test("can switch to Circle of 5ths mode", async ({ page }) => {
+    await page.goto("/");
+    const cofBtn = page.getByRole("button", { name: "Circle of 5ths" });
+    await cofBtn.click();
+    await expect(cofBtn).toHaveClass(/bg-emerald-600/);
+  });
+
+  test("CoF mode shows CoF presets with amber styling", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Circle of 5ths" }).click();
+    await expect(page.getByRole("button", { name: "Pure Fifths" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mirror" })).toBeVisible();
+  });
+
+  test("CoF mode hides key/scale selectors", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Circle of 5ths" }).click();
+    // Key/mode selectors should not be visible in fifths mode
+    await expect(page.locator("select")).toHaveCount(0);
+  });
+
+  test("can select CoF preset", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Circle of 5ths" }).click();
+    const mirrorBtn = page.getByRole("button", { name: "Mirror" });
+    await mirrorBtn.click();
+    await expect(mirrorBtn).toHaveClass(/bg-amber-600/);
+  });
+
+  test("switching from CoF to Interval restores key selectors", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Circle of 5ths" }).click();
+    await expect(page.locator("select")).toHaveCount(0);
+    await page.getByRole("button", { name: "Interval" }).click();
+    await expect(page.locator("select").first()).toBeVisible();
+  });
 });

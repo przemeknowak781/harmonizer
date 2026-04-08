@@ -19,6 +19,7 @@ export function MainLayout() {
     key,
     presetName,
     masterVolume,
+    maxTransposeRatio,
     currentPitch,
     currentConfidence,
     isListening,
@@ -26,6 +27,7 @@ export function MainLayout() {
     setKey,
     setPreset,
     setMasterVolume,
+    setMaxTransposeRatio,
   } = useHarmonizerStore();
 
   const { start, stop, syncSettings, isReady: _isReady, error, pipeline } = useAudio();
@@ -140,6 +142,27 @@ export function MainLayout() {
             }}
             className="flex-1 accent-emerald-500"
           />
+        </section>
+
+        {/* Max Transpose */}
+        <section className="flex items-center gap-3">
+          <span className="text-xs text-zinc-500 uppercase tracking-wider whitespace-nowrap">Max Oct</span>
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={0.5}
+            value={maxTransposeRatio}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setMaxTransposeRatio(v);
+              pipeline.current?.setMaxTransposeRatio(v);
+            }}
+            className="flex-1 accent-rose-500"
+          />
+          <span className="text-xs text-zinc-400 w-12 text-right">
+            {maxTransposeRatio <= 2 ? "1 oct" : maxTransposeRatio <= 4 ? "2 oct" : "3+ oct"}
+          </span>
         </section>
 
         {/* Waveform */}

@@ -45,6 +45,8 @@ interface HarmonizerState {
   currentBeat: number;
   activeProgression: ChordProgression | null;
   voiceStates: VoiceState[];
+  /** Max ratio above source before auto-octave-down. 2 = 1 oct, 4 = 2 oct. */
+  maxTransposeRatio: number;
 
   setKey: (key: KeySignature) => void;
   setPreset: (name: HarmonyPresetName) => void;
@@ -70,6 +72,7 @@ interface HarmonizerState {
   setVoiceOctaveShift: (index: number, shift: number) => void;
   setVoiceCofSteps: (index: number, steps: number) => void;
   setVoiceCofOctaveReduce: (index: number, value: boolean) => void;
+  setMaxTransposeRatio: (ratio: number) => void;
   addVoice: () => void;
   removeVoice: (index: number) => void;
 }
@@ -98,6 +101,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   currentBeat: 0,
   activeProgression: null,
   voiceStates: defaultVoiceStates(),
+  maxTransposeRatio: 4, // default: up to 2 octaves above source
 
   setKey: (key) => set({ key }),
   setPreset: (presetName) => set({ presetName }),
@@ -143,6 +147,8 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
         i === index ? { ...v, octaveShift: clamp(shift, -2, 2) } : v,
       ),
     })),
+  setMaxTransposeRatio: (maxTransposeRatio) =>
+    set({ maxTransposeRatio: clamp(maxTransposeRatio, 1, 8) }),
   setVoiceCofSteps: (index, cofSteps) =>
     set((state) => ({
       voiceStates: state.voiceStates.map((v, i) =>
