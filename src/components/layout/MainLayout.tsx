@@ -65,7 +65,7 @@ export function MainLayout() {
         <section className="flex flex-col gap-4">
           {harmonyMode === "fifths" ? (
             <CofPresetSelector />
-          ) : (
+          ) : harmonyMode === "geometric" ? null : (
             <>
               <KeySelector
                 root={key.root}
@@ -79,15 +79,15 @@ export function MainLayout() {
           )}
         </section>
 
-        {/* Chord Progression Editor (chord mode only) */}
-        {harmonyMode === "chord" && (
+        {/* Chord Progression Editor (chord + geometric modes) */}
+        {(harmonyMode === "chord" || harmonyMode === "geometric") && (
           <section>
             <ChordProgressionEditor />
           </section>
         )}
 
-        {/* Transport Bar (chord mode only) */}
-        {harmonyMode === "chord" && (
+        {/* Transport Bar (chord + geometric modes) */}
+        {(harmonyMode === "chord" || harmonyMode === "geometric") && (
           <section>
             <TransportBar pipeline={pipeline} />
           </section>
@@ -95,27 +95,38 @@ export function MainLayout() {
 
         {/* Voice Controls */}
         <section className="flex gap-3 overflow-x-auto pb-2">
-          {harmonyMode === "fifths" && cofPreset
-            ? cofPreset.voices.map((voice, i) => (
+          {harmonyMode === "geometric"
+            ? [0, 1, 2].map((i) => (
                 <VoiceControl
                   key={i}
-                  label={`${voice.steps > 0 ? "+" : ""}${String(voice.steps)} 5th${voice.octaveReduce ? " (oct)" : ""}`}
-                  volume={voice.volume}
-                  pan={voice.pan}
+                  label={`Voice ${i + 1}`}
+                  volume={0.75}
+                  pan={i === 0 ? -0.4 : i === 1 ? 0.4 : 0}
                   onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
                   onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
                 />
               ))
-            : preset.voices.map((voice, i) => (
-                <VoiceControl
-                  key={i}
-                  label={`${voice.interval} ${voice.direction === "up" ? "\u2191" : "\u2193"}`}
-                  volume={voice.volume}
-                  pan={voice.pan}
-                  onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
-                  onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
-                />
-              ))}
+            : harmonyMode === "fifths" && cofPreset
+              ? cofPreset.voices.map((voice, i) => (
+                  <VoiceControl
+                    key={i}
+                    label={`${voice.steps > 0 ? "+" : ""}${String(voice.steps)} 5th${voice.octaveReduce ? " (oct)" : ""}`}
+                    volume={voice.volume}
+                    pan={voice.pan}
+                    onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
+                    onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
+                  />
+                ))
+              : preset.voices.map((voice, i) => (
+                  <VoiceControl
+                    key={i}
+                    label={`${voice.interval} ${voice.direction === "up" ? "\u2191" : "\u2193"}`}
+                    volume={voice.volume}
+                    pan={voice.pan}
+                    onVolumeChange={(v) => pipeline.current?.setVoiceVolume(i, v)}
+                    onPanChange={(pan) => pipeline.current?.setVoicePan(i, pan)}
+                  />
+                ))}
           <VoiceControl
             label="Dry"
             volume={dryVolume}
