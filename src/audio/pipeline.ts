@@ -362,6 +362,7 @@ export async function createAudioPipeline(
           const reduced = cv.octaveReduce ? octaveReduce(ratio) : ratio;
           const finalRatio = applyOctaveShift(reduced, cv.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          voiceCurrentRatios[i] = finalRatio;
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, cv.volume * formantRolloff(finalRatio));
@@ -405,6 +406,7 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          voiceCurrentRatios[i] = finalRatio;
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -437,6 +439,7 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          voiceCurrentRatios[i] = finalRatio;
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -468,6 +471,7 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          voiceCurrentRatios[i] = finalRatio;
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -571,34 +575,23 @@ export async function createAudioPipeline(
     getLooper: () => looper,
     renderRecording: (dryBuffer: AudioBuffer): AudioBuffer => {
       // Collect current voice configs as offline ratios
+      // Use voiceCurrentRatios which are updated every frame during live harmonization
       const offlineVoices: OfflineVoiceConfig[] = [];
-      const activeCustom = customCofVoices.filter((v) => v.active);
 
       for (let i = 0; i < MAX_VOICES; i++) {
-        const cv = activeCustom[i] ?? customCofVoices[i];
+        const cv = customCofVoices[i]; // direct index, no filter
         if (!cv || !cv.active) continue;
 
-        let ratio: number;
-        if (harmonyMode === "fifths") {
-          const raw = cofRatio(cv.steps);
-          ratio = cv.octaveReduce ? octaveReduce(raw) : raw;
-        } else if (harmonyMode === "geometric" || harmonyMode === "chord") {
-          // For chord/geometric: use last known voice ratios from live harmonization
-          ratio = voiceCurrentRatios[i] ?? 1;
-        } else {
-          // Interval mode: use last known ratio
-          ratio = voiceCurrentRatios[i] ?? 1;
-        }
+        // Use the LIVE ratio that was last applied to this voice
+        // This captures whatever the harmony engine computed (interval/chord/fifths/geometric)
+        const liveRatio = voiceCurrentRatios[i] ?? 1;
 
-        // Apply octave shift
-        ratio *= Math.pow(2, cv.octaveShift);
-        // Clamp to transpose range
-        while (ratio > maxTransposeRatio) ratio /= 2;
-        while (ratio < minTransposeRatio) ratio *= 2;
+        // Skip voices that were at unison (not harmonizing)
+        if (Math.abs(liveRatio - 1) < 0.001) continue;
 
         offlineVoices.push({
-          ratio,
-          volume: cv.volume * formantRolloff(ratio),
+          ratio: liveRatio,
+          volume: cv.volume * formantRolloff(liveRatio),
           pan: cv.pan,
         });
       }
