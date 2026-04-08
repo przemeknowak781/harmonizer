@@ -178,6 +178,31 @@ export async function createAudioPipeline(
     return r;
   }
 
+  /**
+   * Anti-chipmunk volume rolloff.
+   * Smoothly attenuates voices as pitch shift ratio moves away from 1.0.
+   * Returns a gain multiplier 0–1.
+   *
+   * - Ratio 1.0 (unison) = 1.0 gain (full volume)
+   * - Ratio 1.5 (P5) = ~0.95 gain (barely noticeable)
+   * - Ratio 2.0 (octave) = ~0.8 gain
+   * - Ratio 3.0+ = ~0.4 gain (chipmunk territory, heavily attenuated)
+   *
+   * Uses distance in octaves: |log2(ratio)|, with smooth cosine rolloff.
+   */
+  function formantRolloff(ratio: number): number {
+    if (ratio <= 0) return 0;
+    const octaves = Math.abs(Math.log2(ratio));
+    // Start rolling off at 0.5 octaves, full attenuation at 2.5 octaves
+    const onset = 0.5;
+    const full = 2.5;
+    if (octaves <= onset) return 1;
+    if (octaves >= full) return 0.15; // never fully silent, just very quiet
+    // Smooth cosine interpolation
+    const t = (octaves - onset) / (full - onset);
+    return 1 - t * t * 0.85; // quadratic rolloff, floor at 0.15
+  }
+
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
 
@@ -197,8 +222,9 @@ export async function createAudioPipeline(
           const ratio = cofRatio(voiceConfig.steps);
           const reduced = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
-          setPitchShiftRatio(shifter, applyOctaveShift(reduced, gp.octaveShift));
-          gain.gain.value = gp.volume;
+          const finalRatio = applyOctaveShift(reduced, gp.octaveShift);
+          setPitchShiftRatio(shifter, finalRatio);
+          gain.gain.value = gp.volume * formantRolloff(finalRatio);
           panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
@@ -223,8 +249,9 @@ export async function createAudioPipeline(
         if (voice) {
           const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
           const gp = getVoiceState(i, 0.75, defaultPan);
-          setPitchShiftRatio(shifter, applyOctaveShift(voice.ratio, gp.octaveShift));
-          gain.gain.value = gp.volume;
+          const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
+          setPitchShiftRatio(shifter, finalRatio);
+          gain.gain.value = gp.volume * formantRolloff(finalRatio);
           panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
@@ -252,8 +279,9 @@ export async function createAudioPipeline(
         if (targetMidi !== undefined && voiceConfig) {
           const targetFreq = midiToFrequency(targetMidi);
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
-          setPitchShiftRatio(shifter, applyOctaveShift(targetFreq / frequency, gp.octaveShift));
-          gain.gain.value = gp.volume;
+          const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
+          setPitchShiftRatio(shifter, finalRatio);
+          gain.gain.value = gp.volume * formantRolloff(finalRatio);
           panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
@@ -280,8 +308,9 @@ export async function createAudioPipeline(
         const voiceConfig = currentPreset.voices[i];
         if (voice && voiceConfig) {
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
-          setPitchShiftRatio(shifter, applyOctaveShift(voice.ratio, gp.octaveShift));
-          gain.gain.value = gp.volume;
+          const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
+          setPitchShiftRatio(shifter, finalRatio);
+          gain.gain.value = gp.volume * formantRolloff(finalRatio);
           panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
