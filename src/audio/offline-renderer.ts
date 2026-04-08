@@ -166,8 +166,8 @@ export function renderOffline(
   // ── Dry signal (centered) ──
   for (let i = 0; i < length; i++) {
     const sample = inputMono[i]! * dryVolume;
-    left[i] += sample;
-    right[i] += sample;
+    left[i] = (left[i] ?? 0) + sample;
+    right[i] = (right[i] ?? 0) + sample;
   }
 
   // ── Each voice ──
@@ -191,8 +191,8 @@ export function renderOffline(
 
     // 4. Mix into stereo output
     for (let i = 0; i < shifted.length && i < outputLength; i++) {
-      left[i] += shifted[i]! * gainL;
-      right[i] += shifted[i]! * gainR;
+      left[i] = (left[i] ?? 0) + shifted[i]! * gainL;
+      right[i] = (right[i] ?? 0) + shifted[i]! * gainR;
     }
   }
 
@@ -204,8 +204,8 @@ export function renderOffline(
   if (peak > 0.95) {
     const gain = 0.95 / peak;
     for (let i = 0; i < outputLength; i++) {
-      left[i] *= gain;
-      right[i] *= gain;
+      left[i] = (left[i] ?? 0) * gain;
+      right[i] = (right[i] ?? 0) * gain;
     }
   }
 
