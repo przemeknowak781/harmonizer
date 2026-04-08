@@ -286,25 +286,35 @@ export async function createAudioPipeline(
     if (frequency <= 0) return;
 
     if (harmonyMode === "fifths") {
-      // Use custom voices if available, else preset
-      const activeCustom = customCofVoices.filter((v) => v.active);
-      const voices = activeCustom.length > 0 ? activeCustom : currentCofPreset.voices;
-
+      // Use customCofVoices directly (no filter!) — index i maps to voiceShifters[i]
       for (let i = 0; i < MAX_VOICES; i++) {
         const shifter = voiceShifters[i];
         const gain = voiceGains[i];
         const panner = voicePanners[i];
         if (!shifter || !gain || !panner) continue;
 
-        const voiceConfig = voices[i];
-        if (voiceConfig) {
-          const ratio = cofRatio(voiceConfig.steps);
-          const reduced = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
-          const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
-          const finalRatio = applyOctaveShift(reduced, gp.octaveShift);
+        const cv = customCofVoices[i];
+        if (cv && cv.active) {
+          const ratio = cofRatio(cv.steps);
+          const reduced = cv.octaveReduce ? octaveReduce(ratio) : ratio;
+          const finalRatio = applyOctaveShift(reduced, cv.octaveShift);
           smoothRatio(i, shifter, finalRatio);
-          smoothGain(gain, gp.volume * formantRolloff(finalRatio));
-          smoothPan(panner, gp.pan);
+          smoothGain(gain, cv.volume * formantRolloff(finalRatio));
+          smoothPan(panner, cv.pan);
+        } else if (!cv) {
+          // Fallback to preset
+          const presetVoice = currentCofPreset.voices[i];
+          if (presetVoice) {
+            const ratio = cofRatio(presetVoice.steps);
+            const reduced = presetVoice.octaveReduce ? octaveReduce(ratio) : ratio;
+            const gp = getVoiceState(i, presetVoice.volume, presetVoice.pan);
+            const finalRatio = applyOctaveShift(reduced, gp.octaveShift);
+            smoothRatio(i, shifter, finalRatio);
+            smoothGain(gain, gp.volume * formantRolloff(finalRatio));
+            smoothPan(panner, gp.pan);
+          } else {
+            smoothGain(gain, 0);
+          }
         } else {
           smoothGain(gain, 0);
         }
