@@ -136,6 +136,23 @@ export async function createAudioPipeline(
   let activeProgression: ChordProgression | null = null;
   let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean }[] = [];
 
+  /**
+   * Get volume/pan for voice i from store state (customCofVoices).
+   * Falls back to preset config if store state not available.
+   * Respects active flag — inactive voice = volume 0.
+   */
+  function getVoiceGainPan(
+    i: number,
+    fallbackVolume: number,
+    fallbackPan: number,
+  ): { volume: number; pan: number } {
+    const sv = customCofVoices[i];
+    if (sv) {
+      return { volume: sv.active ? sv.volume : 0, pan: sv.pan };
+    }
+    return { volume: fallbackVolume, pan: fallbackPan };
+  }
+
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
 
@@ -155,8 +172,9 @@ export async function createAudioPipeline(
           const ratio = cofRatio(voiceConfig.steps);
           const finalRatio = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
           setPitchShiftRatio(shifter, finalRatio);
-          gain.gain.value = voiceConfig.volume;
-          panner.pan.value = voiceConfig.pan;
+          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          gain.gain.value = gp.volume;
+          panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
         }
@@ -165,7 +183,6 @@ export async function createAudioPipeline(
     }
 
     if (harmonyMode === "geometric") {
-      // Get chord quality from progression (or default to major)
       let quality: ChordQuality = "major";
       if (activeProgression) {
         const currentChord = getChordAtBeat(
@@ -175,7 +192,6 @@ export async function createAudioPipeline(
         quality = currentChord.quality;
       }
 
-      // Pure geometric harmony — no MIDI, no quantization
       const result = computeGeometricHarmony(frequency, quality, MAX_VOICES);
 
       for (let i = 0; i < MAX_VOICES; i++) {
@@ -185,14 +201,12 @@ export async function createAudioPipeline(
         if (!shifter || !gain || !panner) continue;
 
         const voice = result.voices[i];
-        const customVoice = customCofVoices[i];
         if (voice) {
           setPitchShiftRatio(shifter, voice.ratio);
-          // Use store volume/pan if available, else defaults
-          gain.gain.value = customVoice ? (customVoice.active ? customVoice.volume : 0) : 0.75;
-          panner.pan.value = customVoice
-            ? customVoice.pan
-            : i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
+          const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
+          const gp = getVoiceGainPan(i, 0.75, defaultPan);
+          gain.gain.value = gp.volume;
+          panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
         }
@@ -201,7 +215,6 @@ export async function createAudioPipeline(
     }
 
     if (harmonyMode === "chord" && activeProgression) {
-      // Chord-aware path
       const currentChord = getChordAtBeat(
         activeProgression,
         transport.getCurrentBeat(),
@@ -220,8 +233,9 @@ export async function createAudioPipeline(
         if (targetMidi !== undefined && voiceConfig) {
           const targetFreq = midiToFrequency(targetMidi);
           setPitchShiftRatio(shifter, targetFreq / frequency);
-          gain.gain.value = voiceConfig.volume;
-          panner.pan.value = voiceConfig.pan;
+          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          gain.gain.value = gp.volume;
+          panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
         }
@@ -247,8 +261,9 @@ export async function createAudioPipeline(
         const voiceConfig = currentPreset.voices[i];
         if (voice && voiceConfig) {
           setPitchShiftRatio(shifter, voice.ratio);
-          gain.gain.value = voiceConfig.volume;
-          panner.pan.value = voiceConfig.pan;
+          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          gain.gain.value = gp.volume;
+          panner.pan.value = gp.pan;
         } else {
           gain.gain.value = 0;
         }
