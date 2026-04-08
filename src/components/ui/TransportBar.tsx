@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
 import type { AudioPipeline } from "../../audio/pipeline";
 
+const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
+
 interface TransportBarProps {
   pipeline: MutableRefObject<AudioPipeline | null>;
 }
@@ -25,7 +27,6 @@ export function TransportBar({ pipeline }: TransportBarProps) {
     transport.onBeat = (beat) => setCurrentBeat(beat);
     transport.start();
     setTransportPlaying(true);
-    // Poll beat for smooth UI
     beatTimerRef.current = setInterval(() => {
       setCurrentBeat(Math.floor(transport.getCurrentBeat()));
     }, 50);
@@ -68,61 +69,44 @@ export function TransportBar({ pipeline }: TransportBarProps) {
   }, []);
 
   const beatInMeasure = Math.floor(currentBeat) % 4;
+  const btn = "px-2 py-0.5 rounded text-[10px] font-bold transition-all";
 
   return (
-    <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex items-center gap-3 flex-wrap">
       {/* Transport buttons */}
-      <div className="flex gap-2">
+      <div className="flex gap-1">
         {!isTransportPlaying ? (
-          <button
-            onClick={handlePlay}
-            className="px-3 py-1 bg-[var(--green)] hover:bg-[var(--green)]/80 text-white rounded-lg text-xs font-medium transition-colors"
-          >
+          <button onClick={handlePlay}
+            className={`${btn} bg-[var(--green)] hover:bg-[var(--green-dim)] text-black hover:shadow-[0_0_10px_var(--green-glow)]`}>
             Play
           </button>
         ) : (
-          <button
-            onClick={handlePause}
-            className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
-          >
+          <button onClick={handlePause}
+            className={`${btn} bg-[var(--surface-raised)] text-[var(--text)] border border-[var(--border)] hover:bg-[var(--border)]`}>
             Pause
           </button>
         )}
-        <button
-          onClick={handleStop}
-          className="px-3 py-1 bg-[var(--surface-raised)] hover:bg-[var(--border)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-medium transition-colors"
-        >
+        <button onClick={handleStop}
+          className={`${btn} bg-[var(--surface-raised)] text-[var(--text)] border border-[var(--border)] hover:bg-[var(--border)]`}>
           Stop
         </button>
       </div>
 
-      {/* BPM slider */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-[var(--text-dim)] uppercase tracking-wider">
-          BPM
-        </span>
-        <input
-          type="range"
-          min={30}
-          max={300}
-          step={1}
-          value={bpm}
+      {/* BPM */}
+      <div className="flex items-center gap-1.5">
+        <input type="range" min={30} max={300} step={1} value={bpm}
           onChange={(e) => handleBpmChange(Number(e.target.value))}
-          className="w-28"
-        />
-        <span className="text-xs text-[var(--text-mid)] w-8 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          {bpm}
-        </span>
+          className="w-24" />
+        <span className="text-[10px] text-[var(--text-mid)] w-8 text-right" style={mono}>{bpm}</span>
       </div>
 
       {/* Beat indicator */}
-      <div className="flex gap-1.5 items-center">
+      <div className="flex gap-1 items-center">
         {Array.from({ length: 4 }, (_, i) => (
-          <div
-            key={i}
-            className={`w-3 h-3 rounded-full transition-colors ${
+          <div key={i}
+            className={`w-2.5 h-2.5 rounded-full transition-colors ${
               i === beatInMeasure && isTransportPlaying
-                ? "bg-[var(--accent)]"
+                ? "bg-[var(--amber)] shadow-[0_0_6px_var(--amber-glow)]"
                 : "bg-[var(--border)]"
             }`}
           />

@@ -26,13 +26,12 @@ export function Waveform({ analyser }: WaveformProps) {
     const { width, height } = canvas;
     ctx.clearRect(0, 0, width, height);
 
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#C87533"; // copper accent
+    // Glow pass — thicker, lower opacity
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "rgba(240, 160, 48, 0.15)";
     ctx.beginPath();
-
     const sliceWidth = width / bufferLength;
     let x = 0;
-
     for (let i = 0; i < bufferLength; i++) {
       const sample = dataArray[i] ?? 0;
       const y = (sample * 0.5 + 0.5) * height;
@@ -40,8 +39,22 @@ export function Waveform({ analyser }: WaveformProps) {
       else ctx.lineTo(x, y);
       x += sliceWidth;
     }
-
     ctx.stroke();
+
+    // Main pass — crisp amber stroke
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#f0a030";
+    ctx.beginPath();
+    x = 0;
+    for (let i = 0; i < bufferLength; i++) {
+      const sample = dataArray[i] ?? 0;
+      const y = (sample * 0.5 + 0.5) * height;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+      x += sliceWidth;
+    }
+    ctx.stroke();
+
     rafRef.current = requestAnimationFrame(draw);
   }, [analyser]);
 
@@ -56,9 +69,9 @@ export function Waveform({ analyser }: WaveformProps) {
     <canvas
       ref={canvasRef}
       width={600}
-      height={80}
-      className="w-full h-16 rounded-lg"
-      style={{ backgroundColor: "var(--surface-sunken)" }}
+      height={60}
+      className="w-full h-[60px] rounded-lg"
+      style={{ backgroundColor: "var(--surface)" }}
     />
   );
 }

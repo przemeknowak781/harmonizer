@@ -64,36 +64,31 @@ export function ChordProgressionEditor() {
     : -1;
 
   return (
-    <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1">
-        <select
-          value={selectedIndex >= 0 ? selectedIndex : ""}
-          onChange={handleSelect}
-        >
-          <option value="" disabled>
-            Select a progression...
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={selectedIndex >= 0 ? selectedIndex : ""}
+        onChange={handleSelect}
+        className="text-[11px]"
+      >
+        <option value="" disabled>
+          Select progression...
+        </option>
+        {COMMON_PROGRESSIONS.map((t, i) => (
+          <option key={t.name} value={i}>
+            {t.name}
           </option>
-          {COMMON_PROGRESSIONS.map((t, i) => (
-            <option key={t.name} value={i}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        ))}
+      </select>
 
       {activeProgression && (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1 flex-wrap">
           {activeProgression.slots.map((slot, i) => (
-            <div
+            <span
               key={i}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                i === currentSlotIndex
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-[var(--surface-raised)] text-[var(--text)] border border-[var(--border)]"
-              }`}
+              className={`pill ${i === currentSlotIndex ? "pill-active" : "pill-inactive"}`}
             >
               {formatChordName(slot.chord)}
-            </div>
+            </span>
           ))}
         </div>
       )}
