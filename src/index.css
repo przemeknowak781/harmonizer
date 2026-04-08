@@ -1,1 +1,156 @@
 @import "tailwindcss";
+
+:root {
+  --bg: #F5F0E8;
+  --surface: #FFFDF7;
+  --surface-alt: #EDE8DC;
+  --border: #D4C5A9;
+  --border-light: #E8E0D0;
+  --accent: #C87533;
+  --accent-hover: #B5682D;
+  --accent-green: #4A7C6F;
+  --accent-green-hover: #3D6A5E;
+  --text: #2C2416;
+  --text-muted: #8B7D6B;
+  --text-light: #A69882;
+  --danger: #B5443C;
+  --danger-hover: #9C3832;
+  --knob-track: #D4C5A9;
+  --knob-fill: #C87533;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom range slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--knob-track);
+  border-radius: 3px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(44, 36, 22, 0.2);
+  transition: transform 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+  background: var(--accent-hover);
+}
+
+input[type="range"]:disabled {
+  opacity: 0.35;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--text-light);
+  cursor: not-allowed;
+}
+
+/* Firefox range */
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(44, 36, 22, 0.2);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: var(--knob-track);
+  border-radius: 3px;
+}
+
+/* Custom checkbox as toggle switch */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: var(--knob-track);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+input[type="checkbox"]:checked {
+  background: var(--accent);
+}
+
+input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+
+/* Select styling */
+select {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+select:hover {
+  border-color: var(--border);
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(200, 117, 51, 0.15);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-alt);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
