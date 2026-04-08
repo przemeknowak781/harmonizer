@@ -115,8 +115,8 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   currentBeat: 0,
   activeProgression: null,
   voiceStates: defaultVoiceStates(),
-  maxTransposeRatio: 4, // 2 octaves up
-  minTransposeRatio: 0.25, // 2 octaves down
+  maxTransposeRatio: 2, // 1 octave up
+  minTransposeRatio: 0.125, // effectively unlimited down
   smoothFadeEnabled: true,
   fadeTimeMs: 100,
   portamentoEnabled: true,

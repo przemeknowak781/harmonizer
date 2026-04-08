@@ -177,35 +177,17 @@ export async function createAudioPipeline(
     return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
   }
 
-  // --- Configurable smoothing parameters ---
-  let smoothFadeEnabled = true;
-  let fadeTimeSec = 0.1;      // 100ms default
+  // --- Configurable smoothing parameters (stored for UI round-trip) ---
   let portamentoEnabled = true;
-  // portamentoTimeMs and jitterGateCents stored in setSmoothConfig for UI round-trip
 
-  /** Set gain — direct assignment, optionally with simple ramp. */
+  /** Set gain — direct assignment. */
   function smoothGain(gainNode: GainNode, target: number): void {
-    if (!smoothFadeEnabled || fadeTimeSec < 0.01) {
-      gainNode.gain.value = target;
-      return;
-    }
-    // Simple linear ramp — cancel previous, set current, ramp to target
-    const now = context.currentTime;
-    gainNode.gain.cancelScheduledValues(now);
-    gainNode.gain.setValueAtTime(gainNode.gain.value || 0.001, now);
-    gainNode.gain.linearRampToValueAtTime(Math.max(target, 0.0001), now + fadeTimeSec);
+    gainNode.gain.value = target;
   }
 
-  /** Set pan — direct or ramped. */
+  /** Set pan — direct assignment. */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
-    if (!smoothFadeEnabled) {
-      pannerNode.pan.value = target;
-      return;
-    }
-    const now = context.currentTime;
-    pannerNode.pan.cancelScheduledValues(now);
-    pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
-    pannerNode.pan.linearRampToValueAtTime(target, now + fadeTimeSec);
+    pannerNode.pan.value = target;
   }
 
   /**
@@ -299,7 +281,7 @@ export async function createAudioPipeline(
           const ratio = cofRatio(cv.steps);
           const reduced = cv.octaveReduce ? octaveReduce(ratio) : ratio;
           const finalRatio = applyOctaveShift(reduced, cv.octaveShift);
-          smoothRatio(i, shifter, finalRatio);
+          setPitchShiftRatio(shifter, finalRatio);
           smoothGain(gain, cv.volume * formantRolloff(finalRatio));
           smoothPan(panner, cv.pan);
         } else if (!cv) {
@@ -340,7 +322,7 @@ export async function createAudioPipeline(
           const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          smoothRatio(i, shifter, finalRatio);
+          setPitchShiftRatio(shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -370,7 +352,7 @@ export async function createAudioPipeline(
           const targetFreq = midiToFrequency(targetMidi);
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
-          smoothRatio(i, shifter, finalRatio);
+          setPitchShiftRatio(shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -399,7 +381,7 @@ export async function createAudioPipeline(
         if (voice && voiceConfig) {
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          smoothRatio(i, shifter, finalRatio);
+          setPitchShiftRatio(shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -491,10 +473,7 @@ export async function createAudioPipeline(
       minTransposeRatio = Math.max(0.125, Math.min(1, ratio));
     },
     setSmoothConfig: (config) => {
-      smoothFadeEnabled = config.fadeEnabled;
-      fadeTimeSec = config.fadeMs / 1000;
       portamentoEnabled = config.portamentoEnabled;
-      // portamentoMs and jitterCents stored in store, used by smoothRatio alpha
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),
