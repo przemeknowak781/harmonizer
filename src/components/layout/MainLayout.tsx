@@ -37,7 +37,7 @@ export function MainLayout() {
 
   useEffect(() => {
     syncSettings();
-  }, [key, presetName, syncSettings]);
+  }, [key, presetName, harmonyMode, syncSettings]);
 
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
 
@@ -126,7 +126,7 @@ export function MainLayout() {
 
         {/* Smoothing Controls */}
         <section>
-          <SmoothingPanel />
+          <SmoothingPanel pipeline={pipeline} />
         </section>
 
         {/* Looper Controls */}

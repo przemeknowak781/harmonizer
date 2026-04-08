@@ -1,6 +1,23 @@
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
+import type { MutableRefObject } from "react";
+import type { AudioPipeline } from "../../audio/pipeline";
 
-export function SmoothingPanel() {
+interface SmoothingPanelProps {
+  pipeline: MutableRefObject<AudioPipeline | null>;
+}
+
+function syncSmoothToPipeline(pipeline: MutableRefObject<AudioPipeline | null>) {
+  const s = useHarmonizerStore.getState();
+  pipeline.current?.setSmoothConfig({
+    fadeEnabled: s.smoothFadeEnabled,
+    fadeMs: s.fadeTimeMs,
+    portamentoEnabled: s.portamentoEnabled,
+    portamentoMs: s.portamentoTimeMs,
+    jitterCents: s.jitterGateCents,
+  });
+}
+
+export function SmoothingPanel({ pipeline }: SmoothingPanelProps) {
   const {
     smoothFadeEnabled,
     fadeTimeMs,
@@ -24,7 +41,10 @@ export function SmoothingPanel() {
           <input
             type="checkbox"
             checked={smoothFadeEnabled}
-            onChange={(e) => setSmoothFadeEnabled(e.target.checked)}
+            onChange={(e) => {
+              setSmoothFadeEnabled(e.target.checked);
+              syncSmoothToPipeline(pipeline);
+            }}
             className="accent-emerald-500"
           />
           <span className="text-xs text-zinc-400">Fade</span>
@@ -36,7 +56,10 @@ export function SmoothingPanel() {
           step={10}
           value={fadeTimeMs}
           disabled={!smoothFadeEnabled}
-          onChange={(e) => setFadeTimeMs(Number(e.target.value))}
+          onChange={(e) => {
+            setFadeTimeMs(Number(e.target.value));
+            syncSmoothToPipeline(pipeline);
+          }}
           className="flex-1 accent-emerald-500 disabled:opacity-30"
         />
         <span className="text-xs text-zinc-500 w-14 text-right">
@@ -50,7 +73,10 @@ export function SmoothingPanel() {
           <input
             type="checkbox"
             checked={portamentoEnabled}
-            onChange={(e) => setPortamentoEnabled(e.target.checked)}
+            onChange={(e) => {
+              setPortamentoEnabled(e.target.checked);
+              syncSmoothToPipeline(pipeline);
+            }}
             className="accent-violet-500"
           />
           <span className="text-xs text-zinc-400">Legato</span>
@@ -62,7 +88,10 @@ export function SmoothingPanel() {
           step={5}
           value={portamentoTimeMs}
           disabled={!portamentoEnabled}
-          onChange={(e) => setPortamentoTimeMs(Number(e.target.value))}
+          onChange={(e) => {
+            setPortamentoTimeMs(Number(e.target.value));
+            syncSmoothToPipeline(pipeline);
+          }}
           className="flex-1 accent-violet-500 disabled:opacity-30"
         />
         <span className="text-xs text-zinc-500 w-14 text-right">
@@ -80,11 +109,14 @@ export function SmoothingPanel() {
           step={1}
           value={jitterGateCents}
           disabled={!portamentoEnabled}
-          onChange={(e) => setJitterGateCents(Number(e.target.value))}
+          onChange={(e) => {
+            setJitterGateCents(Number(e.target.value));
+            syncSmoothToPipeline(pipeline);
+          }}
           className="flex-1 accent-violet-500 disabled:opacity-30"
         />
         <span className="text-xs text-zinc-500 w-14 text-right">
-          {String(jitterGateCents)} ¢
+          {String(jitterGateCents)} &cent;
         </span>
       </div>
     </div>

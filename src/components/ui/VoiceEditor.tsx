@@ -6,6 +6,20 @@ interface VoiceEditorProps {
   pipeline: MutableRefObject<AudioPipeline | null>;
 }
 
+function syncVoicesToPipeline(pipeline: MutableRefObject<AudioPipeline | null>) {
+  const states = useHarmonizerStore.getState().voiceStates;
+  pipeline.current?.setCustomCofVoices(
+    states.map((v) => ({
+      steps: v.cofSteps,
+      octaveReduce: v.cofOctaveReduce,
+      volume: v.volume,
+      pan: v.pan,
+      active: v.active,
+      octaveShift: v.octaveShift,
+    })),
+  );
+}
+
 export function VoiceEditor({ pipeline }: VoiceEditorProps) {
   const {
     voiceStates,
@@ -45,6 +59,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                   onClick={() => {
                     removeVoice(index);
                     pipeline.current?.setVoiceVolume(index, 0);
+                    syncVoicesToPipeline(pipeline);
                   }}
                   className="text-zinc-600 hover:text-red-400 text-xs"
                 >
@@ -58,6 +73,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                   <button
                     onClick={() => {
                       setVoiceCofSteps(index, cofSteps - 1);
+                      syncVoicesToPipeline(pipeline);
                     }}
                     className="w-6 h-6 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 text-xs"
                   >
@@ -70,6 +86,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                   <button
                     onClick={() => {
                       setVoiceCofSteps(index, cofSteps + 1);
+                      syncVoicesToPipeline(pipeline);
                     }}
                     className="w-6 h-6 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 text-xs"
                   >
@@ -79,9 +96,10 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                     <input
                       type="checkbox"
                       checked={cofOctaveReduce}
-                      onChange={(e) =>
-                        setVoiceCofOctaveReduce(index, e.target.checked)
-                      }
+                      onChange={(e) => {
+                        setVoiceCofOctaveReduce(index, e.target.checked);
+                        syncVoicesToPipeline(pipeline);
+                      }}
                       className="accent-amber-500"
                     />
                     Oct
@@ -105,6 +123,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                   value={octaveShift}
                   onChange={(e) => {
                     setVoiceOctaveShift(index, Number(e.target.value));
+                    syncVoicesToPipeline(pipeline);
                   }}
                   className="w-full accent-violet-500"
                 />
@@ -176,7 +195,10 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
       {/* Add Voice button */}
       {canAdd && (
         <button
-          onClick={addVoice}
+          onClick={() => {
+            addVoice();
+            syncVoicesToPipeline(pipeline);
+          }}
           className="self-start px-4 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 border-dashed hover:border-emerald-600 hover:text-emerald-400 transition-colors"
         >
           + Add Voice
