@@ -574,36 +574,99 @@ export async function createAudioPipeline(
     getTransport: () => transport,
     getLooper: () => looper,
     renderRecording: (dryBuffer: AudioBuffer): AudioBuffer => {
-      // Collect current voice configs as offline ratios
-      // Use voiceCurrentRatios which are updated every frame during live harmonization
+      // Collect active voice configs (volume/pan only — ratio computed per-block)
       const offlineVoices: OfflineVoiceConfig[] = [];
+      const activeIndices: number[] = [];
 
       for (let i = 0; i < MAX_VOICES; i++) {
-        const cv = customCofVoices[i]; // direct index, no filter
+        const cv = customCofVoices[i];
         if (!cv || !cv.active) continue;
-
-        // Use the LIVE ratio that was last applied to this voice
-        // This captures whatever the harmony engine computed (interval/chord/fifths/geometric)
-        const liveRatio = voiceCurrentRatios[i] ?? 1;
-
-        // Skip voices that were at unison (not harmonizing)
-        if (Math.abs(liveRatio - 1) < 0.001) continue;
-
-        offlineVoices.push({
-          ratio: liveRatio,
-          volume: cv.volume * formantRolloff(liveRatio),
-          pan: cv.pan,
-        });
+        activeIndices.push(i);
+        offlineVoices.push({ volume: cv.volume, pan: cv.pan });
       }
+
+      // computeRatios: called per-block with detected frequency
+      // Runs the SAME harmony logic as applyHarmony but returns ratios
+      const computeRatios = (frequency: number): number[] => {
+        const ratios: number[] = [];
+
+        if (harmonyMode === "fifths") {
+          for (const idx of activeIndices) {
+            const cv = customCofVoices[idx];
+            if (!cv) { ratios.push(1); continue; }
+            const raw = cofRatio(cv.steps);
+            const reduced = cv.octaveReduce ? octaveReduce(raw) : raw;
+            let r = reduced * Math.pow(2, cv.octaveShift);
+            while (r > maxTransposeRatio) r /= 2;
+            while (r < minTransposeRatio) r *= 2;
+            ratios.push(r);
+          }
+        } else if (harmonyMode === "geometric") {
+          const quality = melodyAnalyzer.addPitch(frequency);
+          const result = computeGeometricHarmony(frequency, quality, MAX_VOICES);
+          for (let v = 0; v < activeIndices.length; v++) {
+            const idx = activeIndices[v]!;
+            const cv = customCofVoices[idx];
+            const voice = result.voices[v];
+            if (voice && cv) {
+              let r = voice.ratio * Math.pow(2, cv.octaveShift);
+              while (r > maxTransposeRatio) r /= 2;
+              while (r < minTransposeRatio) r *= 2;
+              ratios.push(r);
+            } else {
+              ratios.push(1);
+            }
+          }
+        } else if (harmonyMode === "chord" && activeProgression) {
+          const chord = getChordAtBeat(activeProgression, transport.getCurrentBeat());
+          const sourceMidi = Math.round(frequencyToMidi(frequency));
+          const voiceMidis = voiceLeader.transition(sourceMidi, chord);
+          for (let v = 0; v < activeIndices.length; v++) {
+            const idx = activeIndices[v]!;
+            const cv = customCofVoices[idx];
+            const targetMidi = voiceMidis[v];
+            if (targetMidi !== undefined && cv) {
+              const targetFreq = midiToFrequency(targetMidi);
+              let r = (targetFreq / frequency) * Math.pow(2, cv.octaveShift);
+              while (r > maxTransposeRatio) r /= 2;
+              while (r < minTransposeRatio) r *= 2;
+              ratios.push(r);
+            } else {
+              ratios.push(1);
+            }
+          }
+        } else {
+          // Interval mode
+          if (currentPreset) {
+            const result = computeHarmony(frequency, currentRoot, currentMode, currentPreset);
+            for (let v = 0; v < activeIndices.length; v++) {
+              const idx = activeIndices[v]!;
+              const cv = customCofVoices[idx];
+              const voice = result.voices[v];
+              if (voice && cv) {
+                let r = voice.ratio * Math.pow(2, cv.octaveShift);
+                while (r > maxTransposeRatio) r /= 2;
+                while (r < minTransposeRatio) r *= 2;
+                ratios.push(r);
+              } else {
+                ratios.push(1);
+              }
+            }
+          }
+        }
+
+        return ratios;
+      };
 
       return renderOffline(dryBuffer, {
         dryVolume: dryGain.gain.value,
         voices: offlineVoices,
-        reverbMix: effectsChain.getReverbMix ? effectsChain.getReverbMix() : 0,
-        delayTime: effectsChain.getDelayTime ? effectsChain.getDelayTime() : 0,
-        delayFeedback: effectsChain.getDelayFeedback ? effectsChain.getDelayFeedback() : 0,
-        delayMix: effectsChain.getDelayMix ? effectsChain.getDelayMix() : 0,
+        reverbMix: effectsChain.getReverbMix(),
+        delayTime: effectsChain.getDelayTime(),
+        delayFeedback: effectsChain.getDelayFeedback(),
+        delayMix: effectsChain.getDelayMix(),
         sampleRate: context.sampleRate,
+        computeRatios,
       });
     },
   };
