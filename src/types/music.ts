@@ -24,7 +24,15 @@ export type HarmonyPresetName =
   | "duet-up"
   | "duet-down"
   | "triad"
-  | "power";
+  | "power"
+  | "choir"
+  | "barbershop"
+  | "octaves"
+  | "sixths"
+  | "open-voicing"
+  | "cluster"
+  | "drop-2"
+  | "celtic";
 
 export interface VoiceConfig {
   interval: IntervalName;

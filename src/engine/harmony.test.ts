@@ -49,8 +49,8 @@ describe("computeHarmony", () => {
 });
 
 describe("PRESETS", () => {
-  it("has 4 MVP presets", () => {
-    expect(Object.keys(PRESETS)).toHaveLength(4);
+  it("has 12 presets", () => {
+    expect(Object.keys(PRESETS)).toHaveLength(12);
   });
 
   it("each preset has correct voice count", () => {
