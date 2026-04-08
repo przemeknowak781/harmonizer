@@ -15,10 +15,13 @@ import { LooperControls } from "../ui/LooperControls";
 import { CofPresetSelector } from "../ui/CofPresetSelector";
 import { SmoothingPanel } from "../ui/SmoothingPanel";
 
-function SectionLabel({ children }: { children: string }) {
+const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
+const serif = { fontFamily: "'DM Serif Display', serif" } as const;
+
+function Label({ children }: { children: string }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-light)]">
+    <div className="flex items-center gap-2 mb-1">
+      <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--text-light)]">
         {children}
       </span>
       <div className="flex-1 h-px bg-[var(--border-light)]" />
@@ -53,177 +56,130 @@ export function MainLayout() {
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <div className="max-w-[640px] mx-auto px-4 py-6 flex flex-col gap-6">
-        {/* Header */}
-        <header className="flex items-center justify-between bg-[var(--surface)] rounded-xl px-5 py-3 border border-[var(--border-light)]" style={{ boxShadow: "var(--shadow)" }}>
-          <h1 className="text-xl font-bold tracking-tight" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            Vocal Harmonizer
-          </h1>
-          {!isListening ? (
-            <button
-              onClick={start}
-              className="px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              Start
-            </button>
-          ) : (
-            <button
-              onClick={stop}
-              className="px-5 py-2 bg-[var(--danger)] hover:bg-[var(--danger-hover)] text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              Stop
-            </button>
-          )}
-        </header>
+    <div
+      className="h-screen overflow-hidden bg-[var(--bg)] text-[var(--text)] flex flex-col"
+      style={{ maxHeight: "100dvh" }}
+    >
+      {/* ═══ TOP BAR ═══ */}
+      <header className="flex items-center gap-4 px-4 py-2 bg-[var(--surface)] border-b border-[var(--border-light)] shrink-0">
+        <h1 className="text-lg font-bold tracking-tight" style={serif}>
+          Vocal Harmonizer
+        </h1>
 
-        {error && (
-          <p className="text-[var(--danger)] text-center text-sm">{error}</p>
+        <div className="flex-1" />
+
+        {/* Master Volume — inline in header */}
+        <span className="text-[9px] uppercase tracking-wider text-[var(--text-light)]">Master</span>
+        <input
+          type="range" min={0} max={1} step={0.01}
+          value={masterVolume}
+          onChange={(e) => { const v = Number(e.target.value); setMasterVolume(v); pipeline.current?.setMasterVolume(v); }}
+          className="w-28"
+        />
+        <span className="text-[10px] text-[var(--text-muted)] w-8" style={mono}>
+          {Math.round(masterVolume * 100)}
+        </span>
+
+        {/* Start/Stop */}
+        {!isListening ? (
+          <button onClick={start} className="px-4 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-bold transition-colors">
+            Start
+          </button>
+        ) : (
+          <button onClick={stop} className="px-4 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger-hover)] text-white rounded-lg text-xs font-bold transition-colors">
+            Stop
+          </button>
         )}
+      </header>
 
-        {/* Pitch Display */}
-        <section className="flex justify-center bg-[var(--surface)] rounded-xl border border-[var(--border-light)]" style={{ boxShadow: "var(--shadow)" }}>
+      {error && <p className="text-[var(--danger)] text-center text-xs py-1 shrink-0">{error}</p>}
+
+      {/* ═══ MAIN GRID ═══ */}
+      <div className="flex-1 grid grid-cols-[1fr_1fr] grid-rows-[auto_1fr] gap-2 p-2 min-h-0">
+
+        {/* ─── TOP LEFT: Pitch + Waveform ─── */}
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-light)] p-3 flex flex-col gap-2 overflow-hidden"
+          style={{ boxShadow: "0 1px 4px rgba(44,36,22,0.06)" }}>
           <PitchDisplay frequency={currentPitch} confidence={currentConfidence} />
-        </section>
-
-        {/* Mode */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Mode</SectionLabel>
-          <HarmonyModeSelector />
-        </section>
-
-        {/* Voices */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Voices</SectionLabel>
-          <VoiceEditor pipeline={pipeline} />
-        </section>
-
-        {/* Key & Preset + Rhythm Selector */}
-        {harmonyMode === "fifths" ? (
-          <section className="flex flex-col gap-3">
-            <SectionLabel>Circle of Fifths Preset</SectionLabel>
-            <CofPresetSelector />
-          </section>
-        ) : harmonyMode === "geometric" ? null : (
-          <section className="flex flex-col gap-4">
-            <SectionLabel>Key &amp; Preset</SectionLabel>
-            <KeySelector
-              root={key.root}
-              mode={key.mode}
-              onRootChange={(root) => setKey({ ...key, root })}
-              onModeChange={(mode) => setKey({ ...key, mode })}
-            />
-            <PresetSelector value={presetName} onChange={setPreset} />
-            <RhythmSelector />
-          </section>
-        )}
-
-        {/* Chord Progression Editor (chord + geometric modes) */}
-        {(harmonyMode === "chord" || harmonyMode === "geometric") && (
-          <section className="flex flex-col gap-3">
-            <SectionLabel>Progression</SectionLabel>
-            <ChordProgressionEditor />
-          </section>
-        )}
-
-        {/* Transport Bar (chord + geometric modes) */}
-        {(harmonyMode === "chord" || harmonyMode === "geometric") && (
-          <section className="flex flex-col gap-3">
-            <SectionLabel>Transport</SectionLabel>
-            <TransportBar pipeline={pipeline} />
-          </section>
-        )}
-
-        {/* Effects Panel */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Effects</SectionLabel>
-          <EffectsPanel pipeline={pipeline} />
-        </section>
-
-        {/* Smoothing Controls */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Smoothing</SectionLabel>
-          <SmoothingPanel pipeline={pipeline} />
-        </section>
-
-        {/* Transpose Range */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Transpose Range</SectionLabel>
-          <div className="flex items-center justify-end">
-            <span className="text-xs text-[var(--text-muted)]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-              {minTransposeRatio >= 0.5 ? "-1" : minTransposeRatio >= 0.25 ? "-2" : "-3"} oct
-              {" ... +"}
-              {maxTransposeRatio <= 2 ? "1" : maxTransposeRatio <= 4 ? "2" : "3+"} oct
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--text-light)] w-8">Low</span>
-            <input
-              type="range"
-              min={0.125}
-              max={1}
-              step={0.125}
-              value={minTransposeRatio}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setMinTransposeRatio(v);
-                pipeline.current?.setMinTransposeRatio(v);
-              }}
-              className="flex-1"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--text-light)] w-8">High</span>
-            <input
-              type="range"
-              min={1}
-              max={8}
-              step={0.5}
-              value={maxTransposeRatio}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setMaxTransposeRatio(v);
-                pipeline.current?.setMaxTransposeRatio(v);
-              }}
-              className="flex-1"
-            />
-          </div>
-        </section>
-
-        {/* Master Volume */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Master</SectionLabel>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={masterVolume}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setMasterVolume(v);
-                pipeline.current?.setMasterVolume(v);
-              }}
-              className="flex-1"
-            />
-            <span className="text-xs text-[var(--text-muted)] w-10 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-              {masterVolume.toFixed(2)}
-            </span>
-          </div>
-        </section>
-
-        {/* Waveform */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Waveform</SectionLabel>
           <Waveform analyser={analyser} />
-        </section>
+        </div>
 
-        {/* Looper Controls */}
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Looper</SectionLabel>
+        {/* ─── TOP RIGHT: Mode + Config ─── */}
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-light)] p-3 flex flex-col gap-2 overflow-y-auto min-h-0"
+          style={{ boxShadow: "0 1px 4px rgba(44,36,22,0.06)" }}>
+          <Label>Mode</Label>
+          <HarmonyModeSelector />
+
+          {/* Mode-specific config */}
+          {harmonyMode === "fifths" ? (
+            <>
+              <Label>Circle of Fifths</Label>
+              <CofPresetSelector />
+            </>
+          ) : harmonyMode === "geometric" ? null : (
+            <>
+              <Label>Key &amp; Preset</Label>
+              <KeySelector
+                root={key.root} mode={key.mode}
+                onRootChange={(root) => setKey({ ...key, root })}
+                onModeChange={(mode) => setKey({ ...key, mode })}
+              />
+              <PresetSelector value={presetName} onChange={setPreset} />
+              <RhythmSelector />
+            </>
+          )}
+
+          {(harmonyMode === "chord" || harmonyMode === "geometric") && (
+            <>
+              <Label>Progression</Label>
+              <ChordProgressionEditor />
+              <TransportBar pipeline={pipeline} />
+            </>
+          )}
+        </div>
+
+        {/* ─── BOTTOM LEFT: Voices + Looper ─── */}
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-light)] p-3 flex flex-col gap-2 overflow-y-auto min-h-0"
+          style={{ boxShadow: "0 1px 4px rgba(44,36,22,0.06)" }}>
+          <Label>Voices</Label>
+          <VoiceEditor pipeline={pipeline} />
+
+          <Label>Looper</Label>
           <LooperControls pipeline={pipeline} />
-        </section>
+        </div>
+
+        {/* ─── BOTTOM RIGHT: Effects + Smoothing + Range ─── */}
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-light)] p-3 flex flex-col gap-2 overflow-y-auto min-h-0"
+          style={{ boxShadow: "0 1px 4px rgba(44,36,22,0.06)" }}>
+          <Label>Effects</Label>
+          <EffectsPanel pipeline={pipeline} />
+
+          <Label>Smoothing</Label>
+          <SmoothingPanel pipeline={pipeline} />
+
+          <Label>Transpose Range</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--text-light)] w-6">Low</span>
+            <input type="range" min={0.125} max={1} step={0.125}
+              value={minTransposeRatio}
+              onChange={(e) => { const v = Number(e.target.value); setMinTransposeRatio(v); pipeline.current?.setMinTransposeRatio(v); }}
+              className="flex-1" />
+            <span className="text-[10px] text-[var(--text-muted)] w-10 text-right" style={mono}>
+              {minTransposeRatio >= 0.5 ? "-1" : minTransposeRatio >= 0.25 ? "-2" : "-3"} oct
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--text-light)] w-6">High</span>
+            <input type="range" min={1} max={8} step={0.5}
+              value={maxTransposeRatio}
+              onChange={(e) => { const v = Number(e.target.value); setMaxTransposeRatio(v); pipeline.current?.setMaxTransposeRatio(v); }}
+              className="flex-1" />
+            <span className="text-[10px] text-[var(--text-muted)] w-10 text-right" style={mono}>
+              +{maxTransposeRatio <= 2 ? "1" : maxTransposeRatio <= 4 ? "2" : "3+"} oct
+            </span>
+          </div>
+        </div>
+
       </div>
     </div>
   );

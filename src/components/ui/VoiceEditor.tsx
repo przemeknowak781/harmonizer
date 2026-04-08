@@ -41,13 +41,13 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
   const canAdd = activeVoices.length < 4;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-3 overflow-x-auto pb-2">
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {activeVoices.map(
           ({ index, volume, pan, octaveShift, cofSteps, cofOctaveReduce }) => (
             <div
               key={index}
-              className="flex flex-col gap-2 p-3 bg-[var(--surface)] rounded-xl border border-[var(--border-light)] min-w-36"
+              className="flex flex-col gap-1.5 p-2 bg-[var(--surface-alt)] rounded-lg border border-[var(--border-light)] min-w-28"
               style={{ boxShadow: "var(--shadow)" }}
             >
               <div className="flex items-center justify-between">
@@ -169,7 +169,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
         )}
 
         {/* Dry voice */}
-        <div className="flex flex-col gap-2 p-3 bg-[var(--surface)] rounded-xl border border-[var(--border-light)] min-w-36" style={{ boxShadow: "var(--shadow)" }}>
+        <div className="flex flex-col gap-1.5 p-2 bg-[var(--surface-alt)] rounded-lg border border-[var(--border-light)] min-w-28" style={{ boxShadow: "var(--shadow)" }}>
           <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
             Dry
           </span>

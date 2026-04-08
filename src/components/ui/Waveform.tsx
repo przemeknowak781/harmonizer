@@ -55,9 +55,9 @@ export function Waveform({ analyser }: WaveformProps) {
   return (
     <canvas
       ref={canvasRef}
-      width={800}
-      height={120}
-      className="w-full h-24 rounded-xl"
+      width={600}
+      height={80}
+      className="w-full h-16 rounded-lg"
       style={{ backgroundColor: "var(--surface-alt)" }}
     />
   );
