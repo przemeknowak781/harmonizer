@@ -20,6 +20,7 @@ export function MainLayout() {
     presetName,
     masterVolume,
     maxTransposeRatio,
+    minTransposeRatio,
     currentPitch,
     currentConfidence,
     isListening,
@@ -28,6 +29,7 @@ export function MainLayout() {
     setPreset,
     setMasterVolume,
     setMaxTransposeRatio,
+    setMinTransposeRatio,
   } = useHarmonizerStore();
 
   const { start, stop, syncSettings, isReady: _isReady, error, pipeline } = useAudio();
@@ -144,25 +146,48 @@ export function MainLayout() {
           />
         </section>
 
-        {/* Max Transpose */}
-        <section className="flex items-center gap-3">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider whitespace-nowrap">Max Oct</span>
-          <input
-            type="range"
-            min={1}
-            max={8}
-            step={0.5}
-            value={maxTransposeRatio}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setMaxTransposeRatio(v);
-              pipeline.current?.setMaxTransposeRatio(v);
-            }}
-            className="flex-1 accent-rose-500"
-          />
-          <span className="text-xs text-zinc-400 w-12 text-right">
-            {maxTransposeRatio <= 2 ? "1 oct" : maxTransposeRatio <= 4 ? "2 oct" : "3+ oct"}
-          </span>
+        {/* Transpose Range */}
+        <section className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500 uppercase tracking-wider">Transpose Range</span>
+            <span className="text-xs text-zinc-400">
+              {minTransposeRatio >= 0.5 ? "-1" : minTransposeRatio >= 0.25 ? "-2" : "-3"} oct
+              {" ... +"}
+              {maxTransposeRatio <= 2 ? "1" : maxTransposeRatio <= 4 ? "2" : "3+"} oct
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-500 w-8">Low</span>
+            <input
+              type="range"
+              min={0.125}
+              max={1}
+              step={0.125}
+              value={minTransposeRatio}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setMinTransposeRatio(v);
+                pipeline.current?.setMinTransposeRatio(v);
+              }}
+              className="flex-1 accent-rose-500"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-500 w-8">High</span>
+            <input
+              type="range"
+              min={1}
+              max={8}
+              step={0.5}
+              value={maxTransposeRatio}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setMaxTransposeRatio(v);
+                pipeline.current?.setMaxTransposeRatio(v);
+              }}
+              className="flex-1 accent-rose-500"
+            />
+          </div>
         </section>
 
         {/* Waveform */}

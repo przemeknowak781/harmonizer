@@ -52,6 +52,7 @@ export interface AudioPipeline {
   setDelayMix: (v: number) => void;
   setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[]) => void;
   setMaxTransposeRatio: (ratio: number) => void;
+  setMinTransposeRatio: (ratio: number) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
 }
@@ -160,18 +161,18 @@ export async function createAudioPipeline(
     return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
   }
 
-  let maxTransposeRatio = 4; // default: 2 octaves up
+  let maxTransposeRatio = 4;    // upper limit (2 oct up)
+  let minTransposeRatio = 0.25; // lower limit (2 oct down)
 
-  /** Apply octave shift to a ratio, then clamp by folding down octaves. */
+  /** Apply octave shift to a ratio, then fold by octaves to stay within [min, max]. */
   function applyOctaveShift(ratio: number, shift: number): number {
     let r = ratio * Math.pow(2, shift);
-    // If ratio exceeds max, fold down by octaves until within limit
-    while (r > maxTransposeRatio && r > 1) {
+    // Fold down if above max
+    while (r > maxTransposeRatio) {
       r /= 2;
     }
-    // Same for below: if ratio is too low (below 1/maxTransposeRatio), fold up
-    const minRatio = 1 / maxTransposeRatio;
-    while (r < minRatio && r < 1) {
+    // Fold up if below min
+    while (r < minTransposeRatio) {
       r *= 2;
     }
     return r;
@@ -366,6 +367,9 @@ export async function createAudioPipeline(
     },
     setMaxTransposeRatio: (ratio) => {
       maxTransposeRatio = Math.max(1, Math.min(8, ratio));
+    },
+    setMinTransposeRatio: (ratio) => {
+      minTransposeRatio = Math.max(0.125, Math.min(1, ratio));
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),

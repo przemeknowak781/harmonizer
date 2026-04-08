@@ -25,6 +25,7 @@ export function useAudio() {
     activeProgression,
     voiceStates,
     maxTransposeRatio,
+    minTransposeRatio,
     setPitch,
     setListening,
   } = useHarmonizerStore();
@@ -48,6 +49,7 @@ export function useAudio() {
       pipeline.setDelayFeedback(delayFeedback);
       pipeline.setDelayMix(delayMix);
       pipeline.setMaxTransposeRatio(maxTransposeRatio);
+      pipeline.setMinTransposeRatio(minTransposeRatio);
       pipeline.setCustomCofVoices(voiceStates.map((v) => ({
         steps: v.cofSteps,
         octaveReduce: v.cofOctaveReduce,
@@ -87,6 +89,7 @@ export function useAudio() {
     activeProgression,
     voiceStates,
     maxTransposeRatio,
+    minTransposeRatio,
     setPitch,
     setListening,
   ]);
