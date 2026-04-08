@@ -184,28 +184,27 @@ export async function createAudioPipeline(
   let portamentoTimeSec = 0.06; // 60ms default
   let jitterGateCents = 5;     // 5 cents default
 
-  /** Set gain — smooth ramp or instant, depending on toggle. */
+  /**
+   * Set gain — uses setTargetAtTime which doesn't need cancelScheduledValues.
+   * It exponentially converges to target without discontinuities,
+   * even when called repeatedly (every ~23ms from pitch detector).
+   */
   function smoothGain(gainNode: GainNode, target: number): void {
     if (!smoothFadeEnabled) {
-      gainNode.gain.value = target;
+      gainNode.gain.setValueAtTime(target, context.currentTime);
       return;
     }
-    const now = context.currentTime;
-    gainNode.gain.cancelScheduledValues(now);
-    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-    gainNode.gain.exponentialRampToValueAtTime(Math.max(target, 0.0001), now + fadeTimeSec);
+    // timeConstant = time to reach ~63% of the way to target
+    gainNode.gain.setTargetAtTime(target, context.currentTime, fadeTimeSec / 3);
   }
 
-  /** Set pan — smooth ramp or instant, depending on toggle. */
+  /** Set pan — same approach, no cancel needed. */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
     if (!smoothFadeEnabled) {
-      pannerNode.pan.value = target;
+      pannerNode.pan.setValueAtTime(target, context.currentTime);
       return;
     }
-    const now = context.currentTime;
-    pannerNode.pan.cancelScheduledValues(now);
-    pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
-    pannerNode.pan.linearRampToValueAtTime(target, now + fadeTimeSec * 0.8);
+    pannerNode.pan.setTargetAtTime(target, context.currentTime, fadeTimeSec / 3);
   }
 
   /**
