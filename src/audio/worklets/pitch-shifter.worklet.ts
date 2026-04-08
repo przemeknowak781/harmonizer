@@ -1,34 +1,33 @@
 /**
- * Pitch Shifter — AudioWorkletProcessor
+ * Granular Pitch Shifter — AudioWorkletProcessor
  *
- * Dual-grain overlap-add with Hann crossfade.
- * Two read heads 180° out of phase read from a circular buffer
- * at ratio-adjusted speed, crossfaded with Hann windows to
- * eliminate clicks at grain boundaries.
+ * Two overlapping grains with Hann crossfade.
+ * Each grain reads from a circular input buffer at ratio-adjusted speed.
+ * When a grain finishes, it re-anchors near the write head.
  *
- * Receives pitch shift ratio via message port.
+ * This eliminates: clicks at boundaries, buzz from stale reads, overflow.
  */
 
-const BUFFER_LENGTH = 8192;
-const GRAIN_SIZE = 2048;
-const HALF_GRAIN = GRAIN_SIZE / 2;
+const BUFFER_LENGTH = 16384; // must be power of 2
+const BUFFER_MASK = BUFFER_LENGTH - 1;
+const GRAIN_SIZE = 1024;
 
 class PitchShifterProcessor extends AudioWorkletProcessor {
-  private ratio: number = 1;
   private targetRatio: number = 1;
+  private ratio: number = 1;
   private buffer: Float32Array;
   private writePos: number = 0;
-  private grainPos0: number = 0;         // grain 0 position within grain
-  private grainPos1: number = HALF_GRAIN; // grain 1 offset by half (180°)
-  private readOffset0: number = 0;       // accumulated read offset for grain 0
-  private readOffset1: number = 0;       // accumulated read offset for grain 1
   private hannWindow: Float32Array;
+
+  // Two grains, offset by half a grain
+  private grainPhase: [number, number] = [0, GRAIN_SIZE / 2];
+  private grainReadPos: [number, number] = [0, 0];
+  private grainAnchored: [boolean, boolean] = [false, false];
 
   constructor() {
     super();
     this.buffer = new Float32Array(BUFFER_LENGTH);
 
-    // Pre-compute Hann window for one grain
     this.hannWindow = new Float32Array(GRAIN_SIZE);
     for (let i = 0; i < GRAIN_SIZE; i++) {
       this.hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / GRAIN_SIZE));
@@ -46,64 +45,63 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
     const output = outputs[0]?.[0];
     if (!input || !output) return true;
 
-    // Smooth ratio changes to avoid discontinuities
-    const ratioAlpha = 0.05;
-    this.ratio += (this.targetRatio - this.ratio) * ratioAlpha;
+    // Smooth ratio to avoid zipper noise
+    this.ratio += (this.targetRatio - this.ratio) * 0.05;
+    const ratio = this.ratio;
 
     // Write input to circular buffer
     for (let i = 0; i < input.length; i++) {
-      this.buffer[this.writePos & (BUFFER_LENGTH - 1)] = input[i]!;
-      this.writePos++;
+      this.buffer[(this.writePos + i) & BUFFER_MASK] = input[i]!;
     }
 
-    const ratio = this.ratio;
-
+    // Passthrough if ratio ≈ 1
     if (Math.abs(ratio - 1) < 0.001) {
       output.set(input);
+      this.writePos += input.length;
       return true;
     }
 
-    // Read with two overlapping grains
     for (let i = 0; i < output.length; i++) {
-      // Grain 0
-      const readIdx0 = this.writePos - GRAIN_SIZE + this.readOffset0;
-      const idx0 = readIdx0 & (BUFFER_LENGTH - 1);
-      const idx0next = (readIdx0 + 1) & (BUFFER_LENGTH - 1);
-      const frac0 = this.readOffset0 - Math.floor(this.readOffset0);
-      const sample0 = this.buffer[idx0]! + frac0 * (this.buffer[idx0next]! - this.buffer[idx0]!);
-      const win0 = this.hannWindow[this.grainPos0]!;
+      let sample = 0;
 
-      // Grain 1
-      const readIdx1 = this.writePos - GRAIN_SIZE + this.readOffset1;
-      const idx1 = readIdx1 & (BUFFER_LENGTH - 1);
-      const idx1next = (readIdx1 + 1) & (BUFFER_LENGTH - 1);
-      const frac1 = this.readOffset1 - Math.floor(this.readOffset1);
-      const sample1 = this.buffer[idx1]! + frac1 * (this.buffer[idx1next]! - this.buffer[idx1]!);
-      const win1 = this.hannWindow[this.grainPos1]!;
+      for (let g = 0; g < 2; g++) {
+        const phase = this.grainPhase[g];
 
-      // Crossfaded output
-      output[i] = sample0 * win0 + sample1 * win1;
+        // Anchor grain at start: set read position relative to write head
+        if (phase === 0 || !this.grainAnchored[g]) {
+          // Start reading from GRAIN_SIZE samples behind write head
+          this.grainReadPos[g] = this.writePos + i - GRAIN_SIZE;
+          this.grainAnchored[g] = true;
+        }
 
-      // Advance read positions at ratio speed
-      this.readOffset0 += ratio;
-      this.readOffset1 += ratio;
+        // Read with linear interpolation
+        const readPos = this.grainReadPos[g];
+        const intPos = Math.floor(readPos);
+        const frac = readPos - intPos;
+        const s0 = this.buffer[intPos & BUFFER_MASK]!;
+        const s1 = this.buffer[(intPos + 1) & BUFFER_MASK]!;
+        const interpolated = s0 + frac * (s1 - s0);
 
-      // Advance grain positions
-      this.grainPos0++;
-      this.grainPos1++;
+        // Window
+        const window = this.hannWindow[phase]!;
+        sample += interpolated * window;
 
-      // Reset grain 0 when it completes
-      if (this.grainPos0 >= GRAIN_SIZE) {
-        this.grainPos0 = 0;
-        this.readOffset0 = 0;
+        // Advance read position at pitch-shifted rate
+        this.grainReadPos[g] = readPos + ratio;
+
+        // Advance grain phase
+        let nextPhase = phase + 1;
+        if (nextPhase >= GRAIN_SIZE) {
+          nextPhase = 0;
+          this.grainAnchored[g] = false; // re-anchor on next sample
+        }
+        this.grainPhase[g] = nextPhase;
       }
 
-      // Reset grain 1 when it completes
-      if (this.grainPos1 >= GRAIN_SIZE) {
-        this.grainPos1 = 0;
-        this.readOffset1 = 0;
-      }
+      output[i] = sample;
     }
+
+    this.writePos += input.length;
 
     return true;
   }
