@@ -17,10 +17,10 @@ export interface VoiceState {
 
 function defaultVoiceStates(): VoiceState[] {
   return [
-    { active: true, volume: 0.8, pan: -0.3, octaveShift: 0, cofSteps: 1, cofOctaveReduce: false },
+    { active: true, volume: 0.8, pan: -0.3, octaveShift: -1, cofSteps: 1, cofOctaveReduce: false },
     { active: true, volume: 0.8, pan: 0.3, octaveShift: -1, cofSteps: -1, cofOctaveReduce: false },
-    { active: false, volume: 0.7, pan: 0, octaveShift: 0, cofSteps: 2, cofOctaveReduce: true },
-    { active: false, volume: 0.6, pan: 0, octaveShift: 0, cofSteps: -2, cofOctaveReduce: true },
+    { active: true, volume: 0.7, pan: 0, octaveShift: -1, cofSteps: 2, cofOctaveReduce: true },
+    { active: true, volume: 0.6, pan: 0, octaveShift: -2, cofSteps: -2, cofOctaveReduce: true },
   ];
 }
 
@@ -84,8 +84,8 @@ const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
 export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
-  key: { root: "C", mode: "major" },
-  presetName: "triad",
+  key: { root: "A", mode: "natural-minor" },
+  presetName: "choir",
   masterVolume: 0.8,
   dryVolume: 1,
   isListening: false,
@@ -94,18 +94,18 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   harmonyMode: "chord",
   cofPresetName: "pure-fifths",
   rhythmPattern: "simultaneous",
-  reverbMix: 0,
+  reverbMix: 0.26,
   delayTime: 300,
   delayFeedback: 0.3,
-  delayMix: 0,
+  delayMix: 0.18,
   looperState: "empty",
   bpm: 120,
   isTransportPlaying: false,
   currentBeat: 0,
   activeProgression: null,
   voiceStates: defaultVoiceStates(),
-  maxTransposeRatio: 4, // default: up to 2 octaves above source
-  minTransposeRatio: 0.25, // default: up to 2 octaves below source
+  maxTransposeRatio: 2, // 1 octave up
+  minTransposeRatio: 0.5, // 1 octave down
 
   setKey: (key) => set({ key }),
   setPreset: (presetName) => set({ presetName }),

@@ -6,15 +6,15 @@ describe("harmonizer store", () => {
     useHarmonizerStore.setState(useHarmonizerStore.getInitialState());
   });
 
-  it("default key is C major", () => {
+  it("default key is A minor", () => {
     const state = useHarmonizerStore.getState();
-    expect(state.key.root).toBe("C");
-    expect(state.key.mode).toBe("major");
+    expect(state.key.root).toBe("A");
+    expect(state.key.mode).toBe("natural-minor");
   });
 
-  it("default preset is triad", () => {
+  it("default preset is choir", () => {
     const state = useHarmonizerStore.getState();
-    expect(state.presetName).toBe("triad");
+    expect(state.presetName).toBe("choir");
   });
 
   it("setKey updates key", () => {
@@ -55,10 +55,10 @@ describe("harmonizer store", () => {
 
   it("default effects values", () => {
     const state = useHarmonizerStore.getState();
-    expect(state.reverbMix).toBe(0);
+    expect(state.reverbMix).toBeCloseTo(0.26);
     expect(state.delayTime).toBe(300);
     expect(state.delayFeedback).toBe(0.3);
-    expect(state.delayMix).toBe(0);
+    expect(state.delayMix).toBeCloseTo(0.18);
   });
 
   it("default looper and transport values", () => {
