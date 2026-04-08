@@ -102,14 +102,87 @@ export async function createAudioPipeline(
   const masterGain = context.createGain();
   masterGain.gain.value = 0.6;
 
-  // Voice paths: shifter → gain → panner → delay → effects
+  // Voice paths: shifter → formant correction → gain → panner → delay → effects
   const voiceShifters: AudioWorkletNode[] = [];
   const voiceGains: GainNode[] = [];
   const voicePanners: StereoPannerNode[] = [];
   const voiceDelays: DelayNode[] = [];
 
+  /**
+   * Formant correction EQ per voice.
+   * After pitch shifting by ratio R, formants are also shifted by R.
+   * We counter-shift them with a 3-band parametric EQ:
+   *   - lowShelf: boost/cut at ~300 Hz (fundamental formant F1 region)
+   *   - peak: boost/cut at ~1500 Hz (F2/F3 transition — the "character" region)
+   *   - highShelf: boost/cut at ~4000 Hz (presence/sibilance)
+   */
+  interface FormantEQ {
+    lowShelf: BiquadFilterNode;
+    peak: BiquadFilterNode;
+    highShelf: BiquadFilterNode;
+  }
+  const voiceFormantEQs: FormantEQ[] = [];
+
+  function createFormantEQ(): FormantEQ {
+    const lowShelf = context.createBiquadFilter();
+    lowShelf.type = "lowshelf";
+    lowShelf.frequency.value = 300;
+    lowShelf.gain.value = 0;
+
+    const peak = context.createBiquadFilter();
+    peak.type = "peaking";
+    peak.frequency.value = 1500;
+    peak.Q.value = 1.5;
+    peak.gain.value = 0;
+
+    const highShelf = context.createBiquadFilter();
+    highShelf.type = "highshelf";
+    highShelf.frequency.value = 4000;
+    highShelf.gain.value = 0;
+
+    lowShelf.connect(peak);
+    peak.connect(highShelf);
+
+    return { lowShelf, peak, highShelf };
+  }
+
+  /**
+   * Update formant correction EQ for a given pitch ratio.
+   * The correction counters the formant shift introduced by pitch shifting.
+   *
+   * Shift UP (ratio > 1): formants moved too high → boost lows, cut highs
+   * Shift DOWN (ratio < 1): formants moved too low → cut lows, boost highs
+   *
+   * Correction strength scales with |log2(ratio)| in octaves.
+   */
+  function updateFormantEQ(eq: FormantEQ, ratio: number): void {
+    const octaves = Math.log2(ratio); // positive = up, negative = down
+    const strength = Math.min(Math.abs(octaves), 1.5); // cap at 1.5 octaves
+
+    // dB correction — up to ±8 dB per band
+    const correction = strength * 5.5; // dB per octave of shift
+
+    if (octaves > 0.05) {
+      // Shifted UP — formanty za wysoko → boost lows, cut highs
+      eq.lowShelf.gain.value = correction;
+      eq.peak.gain.value = correction * 0.4;
+      eq.highShelf.gain.value = -correction;
+    } else if (octaves < -0.05) {
+      // Shifted DOWN — formanty za nisko → cut lows, boost highs
+      eq.lowShelf.gain.value = -correction;
+      eq.peak.gain.value = -correction * 0.4;
+      eq.highShelf.gain.value = correction;
+    } else {
+      // Near unison — no correction
+      eq.lowShelf.gain.value = 0;
+      eq.peak.gain.value = 0;
+      eq.highShelf.gain.value = 0;
+    }
+  }
+
   for (let i = 0; i < MAX_VOICES; i++) {
     const shifter = await createPitchShifterNode(context);
+    const formantEQ = createFormantEQ();
     const gain = context.createGain();
     gain.gain.value = 0;
     const panner = context.createStereoPanner();
@@ -117,13 +190,16 @@ export async function createAudioPipeline(
     const delay = context.createDelay(2);
     delay.delayTime.value = 0;
 
+    // Chain: source → shifter → formantEQ → gain → panner → delay → effects
     source.connect(shifter);
-    shifter.connect(gain);
+    shifter.connect(formantEQ.lowShelf);     // into formant correction
+    formantEQ.highShelf.connect(gain);        // out of formant correction
     gain.connect(panner);
     panner.connect(delay);
     delay.connect(effectsChain.input);
 
     voiceShifters.push(shifter);
+    voiceFormantEQs.push(formantEQ);
     voiceGains.push(gain);
     voicePanners.push(panner);
     voiceDelays.push(delay);
@@ -255,9 +331,10 @@ export async function createAudioPipeline(
   function formantRolloff(ratio: number): number {
     if (ratio <= 0) return 0;
     const octaves = Math.abs(Math.log2(ratio));
-    // Start rolling off at 0.5 octaves, full attenuation at 2.5 octaves
-    const onset = 0.5;
-    const full = 2.5;
+    // Start rolling off at 1.2 octaves, full attenuation at 3 octaves
+    // (less aggressive now that formant EQ handles most correction)
+    const onset = 1.2;
+    const full = 3.0;
     if (octaves <= onset) return 1;
     if (octaves >= full) return 0.15; // never fully silent, just very quiet
     // Smooth cosine interpolation
@@ -282,6 +359,8 @@ export async function createAudioPipeline(
           const reduced = cv.octaveReduce ? octaveReduce(ratio) : ratio;
           const finalRatio = applyOctaveShift(reduced, cv.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, cv.volume * formantRolloff(finalRatio));
           smoothPan(panner, cv.pan);
         } else if (!cv) {
@@ -323,6 +402,8 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -353,6 +434,8 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -382,6 +465,8 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
