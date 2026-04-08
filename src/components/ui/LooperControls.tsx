@@ -18,9 +18,21 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
 
   function handleStop() {
     const looper = pipeline.current?.getLooper();
-    if (!looper) return;
-    looper.stop();
-    setLooperState(looper.state);
+    const p = pipeline.current;
+    if (!looper || !p) return;
+
+    // Pass the offline render function — looper calls it with dry buffer
+    looper.stop((dryBuffer) => p.renderRecording(dryBuffer));
+
+    // State will be "rendering" briefly, then "playing"
+    setLooperState("rendering");
+    // Poll for state change (rendering → playing happens async)
+    const check = setInterval(() => {
+      if (looper.state === "playing" || looper.state === "empty") {
+        setLooperState(looper.state);
+        clearInterval(check);
+      }
+    }, 50);
   }
 
   function handleOverdub() {
@@ -56,6 +68,13 @@ export function LooperControls({ pipeline }: LooperControlsProps) {
             className={`${btn} bg-[var(--surface-raised)] text-[var(--text)] border border-[var(--border)] hover:bg-[var(--border)]`}>
             Stop
           </button>
+        </>
+      )}
+
+      {looperState === "rendering" && (
+        <>
+          <div className="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse" />
+          <span className="text-[9px] text-[var(--amber)]">Rendering...</span>
         </>
       )}
 

@@ -1,21 +1,35 @@
-export type LooperState = "empty" | "recording" | "playing" | "overdubbing";
+/**
+ * Audio Looper with Offline Harmony Rendering
+ *
+ * Records dry voice → on stop, renders through all harmony voices
+ * offline (via pipeline.renderRecording) → plays back stereo mixdown.
+ *
+ * States: empty → recording → rendering → playing → overdubbing → playing
+ */
+
+export type LooperState = "empty" | "recording" | "rendering" | "playing" | "overdubbing";
 
 export interface Looper {
   state: LooperState;
   duration: number;
   record: () => void;
-  stop: () => void;
+  stop: (renderFn?: (dryBuffer: AudioBuffer) => AudioBuffer) => void;
   play: () => void;
   overdub: () => void;
   clear: () => void;
   getNode: () => AudioNode;
+  /** Get the raw dry recording (for offline rendering) */
+  getDryBuffer: () => AudioBuffer | null;
+  /** Set the rendered stereo buffer for playback */
+  setRenderedBuffer: (buffer: AudioBuffer) => void;
 }
 
 const MAX_LOOP_SECONDS = 30;
 
 export function createLooper(context: AudioContext): Looper {
   let state: LooperState = "empty";
-  let loopBuffer: AudioBuffer | null = null;
+  let dryBuffer: AudioBuffer | null = null;    // raw recording
+  let loopBuffer: AudioBuffer | null = null;    // rendered stereo mixdown
   let loopSource: AudioBufferSourceNode | null = null;
   let recorder: ScriptProcessorNode | null = null;
   let recordedChunks: Float32Array[] = [];
@@ -25,6 +39,7 @@ export function createLooper(context: AudioContext): Looper {
   const inputGain = context.createGain();
   inputGain.gain.value = 1;
 
+  // Stereo output for rendered buffer
   const outputGain = context.createGain();
   outputGain.gain.value = 1;
   outputGain.connect(context.destination);
@@ -38,7 +53,7 @@ export function createLooper(context: AudioContext): Looper {
       recordedChunks.push(new Float32Array(input));
     };
     inputGain.connect(recorder);
-    recorder.connect(context.destination);
+    recorder.connect(context.destination); // must connect to process
   }
 
   function stopRecording(): AudioBuffer {
@@ -53,11 +68,7 @@ export function createLooper(context: AudioContext): Looper {
     }
     const sampleRate = context.sampleRate;
     const totalSamples = Math.floor(recordDuration * sampleRate);
-    const buffer = context.createBuffer(
-      1,
-      Math.max(1, totalSamples),
-      sampleRate,
-    );
+    const buffer = context.createBuffer(1, Math.max(1, totalSamples), sampleRate);
     const channelData = buffer.getChannelData(0);
     let offset = 0;
     for (const chunk of recordedChunks) {
@@ -76,6 +87,8 @@ export function createLooper(context: AudioContext): Looper {
     loopSource = context.createBufferSource();
     loopSource.buffer = loopBuffer;
     loopSource.loop = true;
+
+    // Stereo buffer: connect both channels
     loopSource.connect(outputGain);
     loopSource.start();
   }
@@ -88,43 +101,67 @@ export function createLooper(context: AudioContext): Looper {
     }
   }
 
-  function mixBuffers(
-    base: AudioBuffer,
-    overlay: AudioBuffer,
-  ): AudioBuffer {
-    const length = base.length;
-    const mixed = context.createBuffer(1, length, context.sampleRate);
-    const mixedData = mixed.getChannelData(0);
-    const baseData = base.getChannelData(0);
-    const overlayData = overlay.getChannelData(0);
-    for (let i = 0; i < length; i++) {
-      mixedData[i] =
-        (baseData[i] ?? 0) + (i < overlayData.length ? (overlayData[i] ?? 0) : 0);
+  function mixStereoBuffers(base: AudioBuffer, overlay: AudioBuffer): AudioBuffer {
+    const channels = Math.max(base.numberOfChannels, overlay.numberOfChannels);
+    const length = Math.max(base.length, overlay.length);
+    const mixed = context.createBuffer(channels, length, context.sampleRate);
+
+    for (let ch = 0; ch < channels; ch++) {
+      const mixedData = mixed.getChannelData(ch);
+      const baseData = ch < base.numberOfChannels ? base.getChannelData(ch) : null;
+      const overlayData = ch < overlay.numberOfChannels ? overlay.getChannelData(ch) : null;
+
+      for (let i = 0; i < length; i++) {
+        const b = baseData && i < base.length ? (baseData[i] ?? 0) : 0;
+        const o = overlayData && i < overlay.length ? (overlayData[i] ?? 0) : 0;
+        mixedData[i] = b + o;
+      }
     }
+
     return mixed;
   }
 
   return {
-    get state() {
-      return state;
-    },
-    get duration() {
-      return duration;
-    },
+    get state() { return state; },
+    get duration() { return duration; },
+
     record() {
       if (state !== "empty") return;
       state = "recording";
       startRecording();
     },
-    stop() {
+
+    stop(renderFn) {
       if (state === "recording") {
-        loopBuffer = stopRecording();
-        duration = loopBuffer.duration;
-        state = "playing";
-        startPlayback();
+        dryBuffer = stopRecording();
+        duration = dryBuffer.duration;
+
+        if (renderFn) {
+          // Offline render through all voices
+          state = "rendering";
+          // Use setTimeout to not block the UI
+          setTimeout(() => {
+            loopBuffer = renderFn(dryBuffer!);
+            state = "playing";
+            startPlayback();
+          }, 0);
+        } else {
+          // Fallback: play dry
+          loopBuffer = dryBuffer;
+          state = "playing";
+          startPlayback();
+        }
       } else if (state === "overdubbing") {
-        const overdubBuffer = stopRecording();
-        if (loopBuffer) loopBuffer = mixBuffers(loopBuffer, overdubBuffer);
+        const overdubDry = stopRecording();
+        let overdubRendered: AudioBuffer;
+        if (renderFn) {
+          overdubRendered = renderFn(overdubDry);
+        } else {
+          overdubRendered = overdubDry;
+        }
+        if (loopBuffer) {
+          loopBuffer = mixStereoBuffers(loopBuffer, overdubRendered);
+        }
         state = "playing";
         startPlayback();
       } else if (state === "playing") {
@@ -132,29 +169,36 @@ export function createLooper(context: AudioContext): Looper {
         state = "playing";
       }
     },
+
     play() {
       if (state === "playing" || !loopBuffer) return;
       state = "playing";
       startPlayback();
     },
+
     overdub() {
       if (state !== "playing" || !loopBuffer) return;
       state = "overdubbing";
       startRecording();
     },
+
     clear() {
       stopPlayback();
-      if (recorder) {
-        recorder.disconnect();
-        recorder = null;
-      }
+      if (recorder) { recorder.disconnect(); recorder = null; }
+      dryBuffer = null;
       loopBuffer = null;
       recordedChunks = [];
       duration = 0;
       state = "empty";
     },
-    getNode() {
-      return inputGain;
+
+    getNode() { return inputGain; },
+
+    getDryBuffer() { return dryBuffer; },
+
+    setRenderedBuffer(buffer: AudioBuffer) {
+      loopBuffer = buffer;
+      duration = buffer.duration;
     },
   };
 }

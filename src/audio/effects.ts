@@ -5,6 +5,10 @@ export interface EffectsChain {
   setDelayTime: (ms: number) => void;
   setDelayFeedback: (fb: number) => void;
   setDelayMix: (wet: number) => void;
+  getReverbMix: () => number;
+  getDelayTime: () => number;
+  getDelayFeedback: () => number;
+  getDelayMix: () => number;
   destroy: () => void;
 }
 
@@ -76,6 +80,10 @@ export function createEffectsChain(context: AudioContext): EffectsChain {
     setDelayMix(wet: number) {
       delayWet.gain.value = Math.max(0, Math.min(1, wet));
     },
+    getReverbMix: () => reverbWet.gain.value,
+    getDelayTime: () => delayNode.delayTime.value,
+    getDelayFeedback: () => delayFeedback.gain.value,
+    getDelayMix: () => delayWet.gain.value,
     destroy() {
       input.disconnect();
       convolver.disconnect();

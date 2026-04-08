@@ -24,6 +24,7 @@ import {
   octaveReduce,
   type CofPreset,
 } from "../engine/circle-of-fifths";
+import { renderOffline, type OfflineVoiceConfig } from "./offline-renderer";
 
 const MAX_VOICES = 4;
 
@@ -62,6 +63,8 @@ export interface AudioPipeline {
   }) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
+  /** Render a dry recording through all voices offline. Returns stereo mixdown. */
+  renderRecording: (dryBuffer: AudioBuffer) => AudioBuffer;
 }
 
 export async function createAudioPipeline(
@@ -566,5 +569,49 @@ export async function createAudioPipeline(
     setDelayMix: (v) => effectsChain.setDelayMix(v),
     getTransport: () => transport,
     getLooper: () => looper,
+    renderRecording: (dryBuffer: AudioBuffer): AudioBuffer => {
+      // Collect current voice configs as offline ratios
+      const offlineVoices: OfflineVoiceConfig[] = [];
+      const activeCustom = customCofVoices.filter((v) => v.active);
+
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const cv = activeCustom[i] ?? customCofVoices[i];
+        if (!cv || !cv.active) continue;
+
+        let ratio: number;
+        if (harmonyMode === "fifths") {
+          const raw = cofRatio(cv.steps);
+          ratio = cv.octaveReduce ? octaveReduce(raw) : raw;
+        } else if (harmonyMode === "geometric" || harmonyMode === "chord") {
+          // For chord/geometric: use last known voice ratios from live harmonization
+          ratio = voiceCurrentRatios[i] ?? 1;
+        } else {
+          // Interval mode: use last known ratio
+          ratio = voiceCurrentRatios[i] ?? 1;
+        }
+
+        // Apply octave shift
+        ratio *= Math.pow(2, cv.octaveShift);
+        // Clamp to transpose range
+        while (ratio > maxTransposeRatio) ratio /= 2;
+        while (ratio < minTransposeRatio) ratio *= 2;
+
+        offlineVoices.push({
+          ratio,
+          volume: cv.volume * formantRolloff(ratio),
+          pan: cv.pan,
+        });
+      }
+
+      return renderOffline(dryBuffer, {
+        dryVolume: dryGain.gain.value,
+        voices: offlineVoices,
+        reverbMix: effectsChain.getReverbMix ? effectsChain.getReverbMix() : 0,
+        delayTime: effectsChain.getDelayTime ? effectsChain.getDelayTime() : 0,
+        delayFeedback: effectsChain.getDelayFeedback ? effectsChain.getDelayFeedback() : 0,
+        delayMix: effectsChain.getDelayMix ? effectsChain.getDelayMix() : 0,
+        sampleRate: context.sampleRate,
+      });
+    },
   };
 }
