@@ -18,8 +18,9 @@ import {
   setPitchShiftRatio,
 } from "./nodes/pitch-shifter-node";
 import {
-  computeCofHarmony,
   COF_PRESETS,
+  cofRatio,
+  octaveReduce,
   type CofPreset,
 } from "../engine/circle-of-fifths";
 
@@ -48,6 +49,7 @@ export interface AudioPipeline {
   setDelayTime: (ms: number) => void;
   setDelayFeedback: (fb: number) => void;
   setDelayMix: (v: number) => void;
+  setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean }[]) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
 }
@@ -132,22 +134,27 @@ export async function createAudioPipeline(
   let harmonyMode: "interval" | "chord" | "fifths" | "geometric" = "chord";
   let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
+  let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean }[] = [];
 
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
 
     if (harmonyMode === "fifths") {
-      const result = computeCofHarmony(frequency, currentCofPreset);
+      // Use custom voices if available, else preset
+      const activeCustom = customCofVoices.filter((v) => v.active);
+      const voices = activeCustom.length > 0 ? activeCustom : currentCofPreset.voices;
+
       for (let i = 0; i < MAX_VOICES; i++) {
         const shifter = voiceShifters[i];
         const gain = voiceGains[i];
         const panner = voicePanners[i];
         if (!shifter || !gain || !panner) continue;
 
-        const voice = result.voices[i];
-        const voiceConfig = currentCofPreset.voices[i];
-        if (voice && voiceConfig) {
-          setPitchShiftRatio(shifter, voice.ratio);
+        const voiceConfig = voices[i];
+        if (voiceConfig) {
+          const ratio = cofRatio(voiceConfig.steps);
+          const finalRatio = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
+          setPitchShiftRatio(shifter, finalRatio);
           gain.gain.value = voiceConfig.volume;
           panner.pan.value = voiceConfig.pan;
         } else {
@@ -178,12 +185,14 @@ export async function createAudioPipeline(
         if (!shifter || !gain || !panner) continue;
 
         const voice = result.voices[i];
+        const customVoice = customCofVoices[i];
         if (voice) {
           setPitchShiftRatio(shifter, voice.ratio);
-          gain.gain.value = 0.75;
-          // Spread voices across stereo field
-          panner.pan.value =
-            i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
+          // Use store volume/pan if available, else defaults
+          gain.gain.value = customVoice ? (customVoice.active ? customVoice.volume : 0) : 0.75;
+          panner.pan.value = customVoice
+            ? customVoice.pan
+            : i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
         } else {
           gain.gain.value = 0;
         }
@@ -317,6 +326,9 @@ export async function createAudioPipeline(
           delayNode.delayTime.value = delayMs / 1000;
         }
       }
+    },
+    setCustomCofVoices: (voices) => {
+      customCofVoices = voices;
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),

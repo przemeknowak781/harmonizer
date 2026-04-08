@@ -3,6 +3,25 @@ import type { KeySignature, HarmonyPresetName } from "../types/music";
 import type { ChordProgression } from "../types/chords";
 import type { LooperState } from "../audio/looper";
 
+// Per-voice state tracked in store
+export interface VoiceState {
+  active: boolean;
+  volume: number;
+  pan: number;
+  // Circle of Fifths params
+  cofSteps: number;
+  cofOctaveReduce: boolean;
+}
+
+function defaultVoiceStates(): VoiceState[] {
+  return [
+    { active: true, volume: 0.8, pan: -0.3, cofSteps: 1, cofOctaveReduce: false },
+    { active: true, volume: 0.8, pan: 0.3, cofSteps: -1, cofOctaveReduce: false },
+    { active: false, volume: 0.7, pan: 0, cofSteps: 2, cofOctaveReduce: true },
+    { active: false, volume: 0.6, pan: 0, cofSteps: -2, cofOctaveReduce: true },
+  ];
+}
+
 interface HarmonizerState {
   key: KeySignature;
   presetName: HarmonyPresetName;
@@ -23,6 +42,7 @@ interface HarmonizerState {
   isTransportPlaying: boolean;
   currentBeat: number;
   activeProgression: ChordProgression | null;
+  voiceStates: VoiceState[];
 
   setKey: (key: KeySignature) => void;
   setPreset: (name: HarmonyPresetName) => void;
@@ -42,6 +62,13 @@ interface HarmonizerState {
   setTransportPlaying: (playing: boolean) => void;
   setCurrentBeat: (beat: number) => void;
   setActiveProgression: (prog: ChordProgression | null) => void;
+  setVoiceVolume: (index: number, volume: number) => void;
+  setVoicePan: (index: number, pan: number) => void;
+  setVoiceActive: (index: number, active: boolean) => void;
+  setVoiceCofSteps: (index: number, steps: number) => void;
+  setVoiceCofOctaveReduce: (index: number, value: boolean) => void;
+  addVoice: () => void;
+  removeVoice: (index: number) => void;
 }
 
 const clamp = (v: number, min: number, max: number) =>
@@ -67,6 +94,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   isTransportPlaying: false,
   currentBeat: 0,
   activeProgression: null,
+  voiceStates: defaultVoiceStates(),
 
   setKey: (key) => set({ key }),
   setPreset: (presetName) => set({ presetName }),
@@ -88,4 +116,50 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   setTransportPlaying: (isTransportPlaying) => set({ isTransportPlaying }),
   setCurrentBeat: (currentBeat) => set({ currentBeat }),
   setActiveProgression: (activeProgression) => set({ activeProgression }),
+  setVoiceVolume: (index, volume) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, volume: clamp(volume, 0, 1) } : v,
+      ),
+    })),
+  setVoicePan: (index, pan) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, pan: clamp(pan, -1, 1) } : v,
+      ),
+    })),
+  setVoiceActive: (index, active) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, active } : v,
+      ),
+    })),
+  setVoiceCofSteps: (index, cofSteps) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, cofSteps: clamp(cofSteps, -6, 6) } : v,
+      ),
+    })),
+  setVoiceCofOctaveReduce: (index, cofOctaveReduce) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, cofOctaveReduce } : v,
+      ),
+    })),
+  addVoice: () =>
+    set((state) => {
+      const firstInactive = state.voiceStates.findIndex((v) => !v.active);
+      if (firstInactive === -1) return state; // all 4 active
+      return {
+        voiceStates: state.voiceStates.map((v, i) =>
+          i === firstInactive ? { ...v, active: true } : v,
+        ),
+      };
+    }),
+  removeVoice: (index) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, active: false } : v,
+      ),
+    })),
 }));

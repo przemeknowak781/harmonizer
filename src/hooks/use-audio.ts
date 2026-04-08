@@ -23,6 +23,7 @@ export function useAudio() {
     delayMix,
     bpm,
     activeProgression,
+    voiceStates,
     setPitch,
     setListening,
   } = useHarmonizerStore();
@@ -45,6 +46,20 @@ export function useAudio() {
       pipeline.setDelayTime(delayTime);
       pipeline.setDelayFeedback(delayFeedback);
       pipeline.setDelayMix(delayMix);
+      pipeline.setCustomCofVoices(voiceStates.map((v) => ({
+        steps: v.cofSteps,
+        octaveReduce: v.cofOctaveReduce,
+        volume: v.volume,
+        pan: v.pan,
+        active: v.active,
+      })));
+      for (let i = 0; i < voiceStates.length; i++) {
+        const vs = voiceStates[i];
+        if (vs) {
+          pipeline.setVoiceVolume(i, vs.active ? vs.volume : 0);
+          pipeline.setVoicePan(i, vs.pan);
+        }
+      }
       await pipeline.start();
 
       pipelineRef.current = pipeline;
@@ -67,6 +82,7 @@ export function useAudio() {
     delayMix,
     bpm,
     activeProgression,
+    voiceStates,
     setPitch,
     setListening,
   ]);
@@ -91,6 +107,20 @@ export function useAudio() {
     pipeline.setDelayTime(delayTime);
     pipeline.setDelayFeedback(delayFeedback);
     pipeline.setDelayMix(delayMix);
+    pipeline.setCustomCofVoices(voiceStates.map((v) => ({
+      steps: v.cofSteps,
+      octaveReduce: v.cofOctaveReduce,
+      volume: v.volume,
+      pan: v.pan,
+      active: v.active,
+    })));
+    for (let i = 0; i < voiceStates.length; i++) {
+      const vs = voiceStates[i];
+      if (vs) {
+        pipeline.setVoiceVolume(i, vs.active ? vs.volume : 0);
+        pipeline.setVoicePan(i, vs.pan);
+      }
+    }
   }, [
     key,
     presetName,
@@ -103,6 +133,7 @@ export function useAudio() {
     delayMix,
     bpm,
     activeProgression,
+    voiceStates,
   ]);
 
   return { start, stop, syncSettings, isReady, error, pipeline: pipelineRef };
