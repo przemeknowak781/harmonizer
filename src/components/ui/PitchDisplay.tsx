@@ -10,75 +10,64 @@ interface PitchDisplayProps {
 
 /**
  * Rotary dial pitch display.
- * SVG arc rotates based on cents offset (-50 to +50).
- * Glow color: green (in tune) → amber (close) → red (off).
+ * Uses stroke-dasharray on a circle for the arc — no SVG path math bugs.
+ * Needle + arc glow: green (in tune) → amber → red (off).
  */
 export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
   const isActive = frequency && frequency > 0 && confidence >= 0.5;
 
-  // Dial geometry
   const SIZE = 180;
   const CX = SIZE / 2;
   const CY = SIZE / 2;
-  const R = 72;               // main arc radius
-  const STROKE = 5;
-  const ARC_SPAN = 240;       // degrees of arc sweep
-  const ARC_START = -210;     // start angle (left of top)
+  const R = 70;
+  const CIRCUMFERENCE = 2 * Math.PI * R;
+  const ARC_FRACTION = 0.667;                  // 240° out of 360°
+  const ARC_LENGTH = CIRCUMFERENCE * ARC_FRACTION;
+  const GAP_LENGTH = CIRCUMFERENCE - ARC_LENGTH;
+  const ROTATION = 150;                         // rotate so gap is at bottom
 
-  // Compute needle angle: 0¢ = top center, ±50¢ = edges
   const cents = isActive ? frequencyToPitchInfo(frequency).centsOffset : 0;
   const info = isActive ? frequencyToPitchInfo(frequency) : null;
-  const needleAngle = ARC_START + (ARC_SPAN / 2) + (cents / 50) * (ARC_SPAN / 2);
 
-  // Color based on accuracy
+  // Needle: 0¢ = top (12 o'clock), -50¢ = left edge, +50¢ = right edge
+  // Arc goes from -120° to +120° (240° span), with 0° = top
+  const needleDeg = -90 + (cents / 50) * 120; // -90=top, maps cents to ±120°
+
+  // Active arc: from center (top) to needle
+  // Expressed as dasharray length from the arc start
+  const centerOffset = ARC_LENGTH / 2;          // center of arc = 0¢
+  const needleOffset = centerOffset + (cents / 50) * (ARC_LENGTH / 2);
+  const activeStart = Math.min(centerOffset, needleOffset);
+  const activeEnd = Math.max(centerOffset, needleOffset);
+  const activeLen = activeEnd - activeStart;
+
+  // Color
   const absCents = Math.abs(cents);
   let color: string;
-  let glowColor: string;
-  let glowIntensity: number;
+  let glow: string;
   if (!isActive) {
     color = "var(--border)";
-    glowColor = "transparent";
-    glowIntensity = 0;
+    glow = "transparent";
   } else if (absCents <= 5) {
-    color = "#50e878";          // bright green — in tune
-    glowColor = "rgba(80, 232, 120, 0.4)";
-    glowIntensity = 1;
+    color = "#50e878";
+    glow = "rgba(80, 232, 120, 0.5)";
   } else if (absCents <= 15) {
-    color = "#a0d850";          // yellow-green — close
-    glowColor = "rgba(160, 216, 80, 0.3)";
-    glowIntensity = 0.7;
+    color = "#a0d850";
+    glow = "rgba(160, 216, 80, 0.35)";
   } else if (absCents <= 30) {
-    color = "var(--amber)";     // amber — off
-    glowColor = "var(--amber-glow-strong)";
-    glowIntensity = 0.5;
+    color = "#f0a030";
+    glow = "rgba(240, 160, 48, 0.35)";
   } else {
-    color = "var(--red)";       // red — very off
-    glowColor = "rgba(240, 80, 80, 0.4)";
-    glowIntensity = 0.6;
-  }
-
-  // SVG arc path helper
-  function arcPath(radius: number, startDeg: number, endDeg: number): string {
-    const startRad = (startDeg * Math.PI) / 180;
-    const endRad = (endDeg * Math.PI) / 180;
-    const x1 = CX + radius * Math.cos(startRad);
-    const y1 = CY + radius * Math.sin(startRad);
-    const x2 = CX + radius * Math.cos(endRad);
-    const y2 = CY + radius * Math.sin(endRad);
-    const largeArc = endDeg - startDeg > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
+    color = "#f05050";
+    glow = "rgba(240, 80, 80, 0.4)";
   }
 
   // Needle endpoint
-  const needleRad = (needleAngle * Math.PI) / 180;
-  const needleInner = 20;
-  const needleOuter = R - 8;
-  const nx1 = CX + needleInner * Math.cos(needleRad);
-  const ny1 = CY + needleInner * Math.sin(needleRad);
-  const nx2 = CX + needleOuter * Math.cos(needleRad);
-  const ny2 = CY + needleOuter * Math.sin(needleRad);
+  const needleRad = (needleDeg * Math.PI) / 180;
+  const NEEDLE_INNER = 22;
+  const NEEDLE_OUTER = R - 6;
 
-  // Tick marks
+  // Tick marks (every 10¢)
   const ticks = [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50];
 
   return (
@@ -86,110 +75,115 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
       <div className="relative" style={{ width: SIZE, height: SIZE }}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <defs>
-            {/* Glow filter */}
-            <filter id="dial-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <filter id="needle-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
+            <filter id="glow-f" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" />
             </filter>
           </defs>
 
-          {/* Background arc (track) */}
-          <path
-            d={arcPath(R, ARC_START, ARC_START + ARC_SPAN)}
+          {/* Track arc (background) */}
+          <circle
+            cx={CX} cy={CY} r={R}
             fill="none"
             stroke="var(--border)"
-            strokeWidth={STROKE}
+            strokeWidth={4}
+            strokeDasharray={`${ARC_LENGTH} ${GAP_LENGTH}`}
+            strokeDashoffset={-GAP_LENGTH / 2}
             strokeLinecap="round"
+            transform={`rotate(${ROTATION} ${CX} ${CY})`}
           />
+
+          {/* Active arc (glow layer) */}
+          {isActive && activeLen > 0.5 && (
+            <circle
+              cx={CX} cy={CY} r={R}
+              fill="none"
+              stroke={color}
+              strokeWidth={6}
+              strokeDasharray={`${activeLen} ${CIRCUMFERENCE - activeLen}`}
+              strokeDashoffset={-activeStart - GAP_LENGTH / 2}
+              strokeLinecap="round"
+              transform={`rotate(${ROTATION} ${CX} ${CY})`}
+              filter="url(#glow-f)"
+              opacity={0.6}
+              style={{ transition: "stroke-dasharray 0.1s, stroke-dashoffset 0.1s, stroke 0.15s" }}
+            />
+          )}
+
+          {/* Active arc (crisp layer) */}
+          {isActive && activeLen > 0.5 && (
+            <circle
+              cx={CX} cy={CY} r={R}
+              fill="none"
+              stroke={color}
+              strokeWidth={5}
+              strokeDasharray={`${activeLen} ${CIRCUMFERENCE - activeLen}`}
+              strokeDashoffset={-activeStart - GAP_LENGTH / 2}
+              strokeLinecap="round"
+              transform={`rotate(${ROTATION} ${CX} ${CY})`}
+              style={{ transition: "stroke-dasharray 0.1s, stroke-dashoffset 0.1s, stroke 0.15s" }}
+            />
+          )}
 
           {/* Tick marks */}
           {ticks.map((tick) => {
-            const angle = ARC_START + (ARC_SPAN / 2) + (tick / 50) * (ARC_SPAN / 2);
-            const rad = (angle * Math.PI) / 180;
+            const deg = -90 + (tick / 50) * 120;
+            const rad = (deg * Math.PI) / 180;
             const isMajor = tick === 0;
-            const isMinor = tick % 10 === 0;
-            const innerR = isMajor ? R - 14 : isMinor ? R - 10 : R - 7;
-            const outerR = R + 6;
+            const innerR = isMajor ? R - 16 : R - 9;
+            const outerR = R + 7;
             return (
-              <line
-                key={tick}
-                x1={CX + innerR * Math.cos(rad)}
-                y1={CY + innerR * Math.sin(rad)}
-                x2={CX + outerR * Math.cos(rad)}
-                y2={CY + outerR * Math.sin(rad)}
-                stroke={isMajor ? "var(--text-mid)" : "var(--border)"}
+              <line key={tick}
+                x1={CX + innerR * Math.cos(rad)} y1={CY + innerR * Math.sin(rad)}
+                x2={CX + outerR * Math.cos(rad)} y2={CY + outerR * Math.sin(rad)}
+                stroke={isMajor ? "var(--text-mid)" : "var(--text-dim)"}
                 strokeWidth={isMajor ? 2 : 1}
-                opacity={isMajor ? 1 : 0.5}
+                opacity={isMajor ? 0.8 : 0.3}
               />
             );
           })}
 
-          {/* Active arc segment (from center to current position) */}
+          {/* Needle (glow) */}
           {isActive && (
-            <path
-              d={arcPath(R, ARC_START + ARC_SPAN / 2, needleAngle > ARC_START + ARC_SPAN / 2
-                ? needleAngle
-                : ARC_START + ARC_SPAN / 2)}
-              fill="none"
-              stroke={color}
-              strokeWidth={STROKE + 1}
-              strokeLinecap="round"
-              filter="url(#dial-glow)"
-              style={{ transition: "d 0.1s ease-out" }}
-            />
-          )}
-          {/* Mirror arc for negative cents */}
-          {isActive && cents < 0 && (
-            <path
-              d={arcPath(R, needleAngle, ARC_START + ARC_SPAN / 2)}
-              fill="none"
-              stroke={color}
-              strokeWidth={STROKE + 1}
-              strokeLinecap="round"
-              filter="url(#dial-glow)"
+            <line
+              x1={CX + NEEDLE_INNER * Math.cos(needleRad)}
+              y1={CY + NEEDLE_INNER * Math.sin(needleRad)}
+              x2={CX + NEEDLE_OUTER * Math.cos(needleRad)}
+              y2={CY + NEEDLE_OUTER * Math.sin(needleRad)}
+              stroke={color} strokeWidth={4} strokeLinecap="round"
+              filter="url(#glow-f)" opacity={0.5}
+              style={{ transition: "x1 0.08s, y1 0.08s, x2 0.08s, y2 0.08s, stroke 0.15s" }}
             />
           )}
 
-          {/* Needle */}
+          {/* Needle (crisp) */}
           <line
-            x1={nx1} y1={ny1}
-            x2={nx2} y2={ny2}
+            x1={CX + NEEDLE_INNER * Math.cos(needleRad)}
+            y1={CY + NEEDLE_INNER * Math.sin(needleRad)}
+            x2={CX + NEEDLE_OUTER * Math.cos(needleRad)}
+            y2={CY + NEEDLE_OUTER * Math.sin(needleRad)}
             stroke={isActive ? color : "var(--border)"}
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            filter={isActive ? "url(#needle-glow)" : undefined}
-            style={{ transition: "all 0.08s ease-out" }}
+            strokeWidth={2.5} strokeLinecap="round"
+            style={{ transition: "x1 0.08s, y1 0.08s, x2 0.08s, y2 0.08s, stroke 0.15s" }}
           />
 
           {/* Center dot */}
-          <circle
-            cx={CX} cy={CY} r={4}
+          <circle cx={CX} cy={CY} r={4}
             fill={isActive ? color : "var(--border)"}
             style={{
-              filter: isActive ? `drop-shadow(0 0 ${6 * glowIntensity}px ${glowColor})` : undefined,
+              filter: isActive ? `drop-shadow(0 0 6px ${glow})` : undefined,
               transition: "fill 0.15s",
             }}
           />
         </svg>
 
-        {/* Note name — centered in dial */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ paddingTop: "10px" }}>
+        {/* Note name inside dial */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ paddingTop: 8 }}>
           <span
-            className={`text-4xl font-bold select-none ${isActive ? "" : "opacity-20"}`}
+            className={`text-4xl font-bold select-none ${isActive ? "" : "opacity-15"}`}
             style={{
               ...serif,
               color: isActive ? color : "var(--border)",
-              textShadow: isActive ? `0 0 20px ${glowColor}` : "none",
+              textShadow: isActive ? `0 0 16px ${glow}` : "none",
               transition: "color 0.15s, text-shadow 0.15s",
             }}
           >
@@ -203,21 +197,18 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
         </div>
       </div>
 
-      {/* Cents readout below dial */}
-      {isActive && (
-        <div className="flex items-center gap-2 -mt-2">
-          <span className="text-[9px] text-[var(--text-dim)]" style={mono}>-50</span>
-          <span
-            className="text-sm font-bold"
-            style={{ ...mono, color, textShadow: `0 0 8px ${glowColor}` }}
-          >
+      {/* Cents readout */}
+      {isActive ? (
+        <div className="flex items-center gap-2 -mt-3">
+          <span className="text-[8px] text-[var(--text-dim)]" style={mono}>-50</span>
+          <span className="text-sm font-bold"
+            style={{ ...mono, color, textShadow: `0 0 8px ${glow}` }}>
             {cents >= 0 ? "+" : ""}{cents}¢
           </span>
-          <span className="text-[9px] text-[var(--text-dim)]" style={mono}>+50</span>
+          <span className="text-[8px] text-[var(--text-dim)]" style={mono}>+50</span>
         </div>
-      )}
-      {!isActive && (
-        <span className="text-[10px] text-[var(--text-dim)] -mt-2 animate-float" style={mono}>
+      ) : (
+        <span className="text-[10px] text-[var(--text-dim)] -mt-3 animate-float" style={mono}>
           waiting for signal...
         </span>
       )}
