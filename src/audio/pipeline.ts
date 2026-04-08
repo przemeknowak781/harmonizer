@@ -161,6 +161,25 @@ export async function createAudioPipeline(
     return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
   }
 
+  /** Fade time in seconds for smooth voice entry/exit. */
+  const FADE_TIME = 0.03; // 30ms — fast enough for real-time, slow enough to avoid clicks
+
+  /** Smoothly ramp a gain node instead of jumping. */
+  function smoothGain(gainNode: GainNode, target: number): void {
+    const now = context.currentTime;
+    gainNode.gain.cancelScheduledValues(now);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+    gainNode.gain.linearRampToValueAtTime(target, now + FADE_TIME);
+  }
+
+  /** Smoothly ramp a panner node. */
+  function smoothPan(pannerNode: StereoPannerNode, target: number): void {
+    const now = context.currentTime;
+    pannerNode.pan.cancelScheduledValues(now);
+    pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
+    pannerNode.pan.linearRampToValueAtTime(target, now + FADE_TIME);
+  }
+
   let maxTransposeRatio = 4;    // upper limit (2 oct up)
   let minTransposeRatio = 0.25; // lower limit (2 oct down)
 
@@ -224,10 +243,10 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(reduced, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
-          gain.gain.value = gp.volume * formantRolloff(finalRatio);
-          panner.pan.value = gp.pan;
+          smoothGain(gain, gp.volume * formantRolloff(finalRatio));
+          smoothPan(panner, gp.pan);
         } else {
-          gain.gain.value = 0;
+          smoothGain(gain, 0);
         }
       }
       return;
@@ -251,10 +270,10 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
-          gain.gain.value = gp.volume * formantRolloff(finalRatio);
-          panner.pan.value = gp.pan;
+          smoothGain(gain, gp.volume * formantRolloff(finalRatio));
+          smoothPan(panner, gp.pan);
         } else {
-          gain.gain.value = 0;
+          smoothGain(gain, 0);
         }
       }
       return;
@@ -281,10 +300,10 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
-          gain.gain.value = gp.volume * formantRolloff(finalRatio);
-          panner.pan.value = gp.pan;
+          smoothGain(gain, gp.volume * formantRolloff(finalRatio));
+          smoothPan(panner, gp.pan);
         } else {
-          gain.gain.value = 0;
+          smoothGain(gain, 0);
         }
       }
     } else {
@@ -310,10 +329,10 @@ export async function createAudioPipeline(
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
           setPitchShiftRatio(shifter, finalRatio);
-          gain.gain.value = gp.volume * formantRolloff(finalRatio);
-          panner.pan.value = gp.pan;
+          smoothGain(gain, gp.volume * formantRolloff(finalRatio));
+          smoothPan(panner, gp.pan);
         } else {
-          gain.gain.value = 0;
+          smoothGain(gain, 0);
         }
       }
     }
