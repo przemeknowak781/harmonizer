@@ -26,6 +26,11 @@ export function useAudio() {
     voiceStates,
     maxTransposeRatio,
     minTransposeRatio,
+    smoothFadeEnabled,
+    fadeTimeMs,
+    portamentoEnabled,
+    portamentoTimeMs,
+    jitterGateCents,
     setPitch,
     setListening,
   } = useHarmonizerStore();
@@ -50,6 +55,13 @@ export function useAudio() {
       pipeline.setDelayMix(delayMix);
       pipeline.setMaxTransposeRatio(maxTransposeRatio);
       pipeline.setMinTransposeRatio(minTransposeRatio);
+      pipeline.setSmoothConfig({
+        fadeEnabled: smoothFadeEnabled,
+        fadeMs: fadeTimeMs,
+        portamentoEnabled: portamentoEnabled,
+        portamentoMs: portamentoTimeMs,
+        jitterCents: jitterGateCents,
+      });
       pipeline.setCustomCofVoices(voiceStates.map((v) => ({
         steps: v.cofSteps,
         octaveReduce: v.cofOctaveReduce,
@@ -90,6 +102,11 @@ export function useAudio() {
     voiceStates,
     maxTransposeRatio,
     minTransposeRatio,
+    smoothFadeEnabled,
+    fadeTimeMs,
+    portamentoEnabled,
+    portamentoTimeMs,
+    jitterGateCents,
     setPitch,
     setListening,
   ]);

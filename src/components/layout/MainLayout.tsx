@@ -13,6 +13,7 @@ import { TransportBar } from "../ui/TransportBar";
 import { EffectsPanel } from "../ui/EffectsPanel";
 import { LooperControls } from "../ui/LooperControls";
 import { CofPresetSelector } from "../ui/CofPresetSelector";
+import { SmoothingPanel } from "../ui/SmoothingPanel";
 
 export function MainLayout() {
   const {
@@ -121,6 +122,11 @@ export function MainLayout() {
         {/* Effects Panel */}
         <section>
           <EffectsPanel pipeline={pipeline} />
+        </section>
+
+        {/* Smoothing Controls */}
+        <section>
+          <SmoothingPanel />
         </section>
 
         {/* Looper Controls */}

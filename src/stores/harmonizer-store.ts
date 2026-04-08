@@ -47,6 +47,12 @@ interface HarmonizerState {
   voiceStates: VoiceState[];
   /** Max ratio above source before auto-octave-down. 2 = 1 oct, 4 = 2 oct. */
   maxTransposeRatio: number;
+  /** Smooth controls */
+  smoothFadeEnabled: boolean;
+  fadeTimeMs: number;          // 10–300 ms
+  portamentoEnabled: boolean;
+  portamentoTimeMs: number;    // 10–200 ms
+  jitterGateCents: number;     // 0–50 cents
   /** Min ratio below source before auto-octave-up. 0.5 = 1 oct down, 0.25 = 2 oct down. */
   minTransposeRatio: number;
 
@@ -76,6 +82,11 @@ interface HarmonizerState {
   setVoiceCofOctaveReduce: (index: number, value: boolean) => void;
   setMaxTransposeRatio: (ratio: number) => void;
   setMinTransposeRatio: (ratio: number) => void;
+  setSmoothFadeEnabled: (v: boolean) => void;
+  setFadeTimeMs: (v: number) => void;
+  setPortamentoEnabled: (v: boolean) => void;
+  setPortamentoTimeMs: (v: number) => void;
+  setJitterGateCents: (v: number) => void;
   addVoice: () => void;
   removeVoice: (index: number) => void;
 }
@@ -106,6 +117,11 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   voiceStates: defaultVoiceStates(),
   maxTransposeRatio: 2, // 1 octave up
   minTransposeRatio: 0.5, // 1 octave down
+  smoothFadeEnabled: true,
+  fadeTimeMs: 100,
+  portamentoEnabled: true,
+  portamentoTimeMs: 60,
+  jitterGateCents: 5,
 
   setKey: (key) => set({ key }),
   setPreset: (presetName) => set({ presetName }),
@@ -155,6 +171,11 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
     set({ maxTransposeRatio: clamp(maxTransposeRatio, 1, 8) }),
   setMinTransposeRatio: (minTransposeRatio) =>
     set({ minTransposeRatio: clamp(minTransposeRatio, 0.125, 1) }),
+  setSmoothFadeEnabled: (smoothFadeEnabled) => set({ smoothFadeEnabled }),
+  setFadeTimeMs: (fadeTimeMs) => set({ fadeTimeMs: clamp(fadeTimeMs, 10, 300) }),
+  setPortamentoEnabled: (portamentoEnabled) => set({ portamentoEnabled }),
+  setPortamentoTimeMs: (portamentoTimeMs) => set({ portamentoTimeMs: clamp(portamentoTimeMs, 10, 200) }),
+  setJitterGateCents: (jitterGateCents) => set({ jitterGateCents: clamp(jitterGateCents, 0, 50) }),
   setVoiceCofSteps: (index, cofSteps) =>
     set((state) => ({
       voiceStates: state.voiceStates.map((v, i) =>

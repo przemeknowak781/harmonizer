@@ -53,6 +53,13 @@ export interface AudioPipeline {
   setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[]) => void;
   setMaxTransposeRatio: (ratio: number) => void;
   setMinTransposeRatio: (ratio: number) => void;
+  setSmoothConfig: (config: {
+    fadeEnabled: boolean;
+    fadeMs: number;
+    portamentoEnabled: boolean;
+    portamentoMs: number;
+    jitterCents: number;
+  }) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
 }
@@ -170,52 +177,65 @@ export async function createAudioPipeline(
     return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
   }
 
-  /** Fade time in seconds for smooth voice entry/exit. */
-  const GAIN_FADE = 0.1;  // 100ms — smooth enough to eliminate pops
-  const PAN_FADE = 0.08;  // 80ms
+  // --- Configurable smoothing parameters ---
+  let smoothFadeEnabled = true;
+  let fadeTimeSec = 0.1;      // 100ms default
+  let portamentoEnabled = true;
+  let portamentoTimeSec = 0.06; // 60ms default
+  let jitterGateCents = 5;     // 5 cents default
 
-  /** Smoothly ramp a gain node instead of jumping. */
+  /** Set gain — smooth ramp or instant, depending on toggle. */
   function smoothGain(gainNode: GainNode, target: number): void {
+    if (!smoothFadeEnabled) {
+      gainNode.gain.value = target;
+      return;
+    }
     const now = context.currentTime;
     gainNode.gain.cancelScheduledValues(now);
     gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-    gainNode.gain.exponentialRampToValueAtTime(Math.max(target, 0.0001), now + GAIN_FADE);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(target, 0.0001), now + fadeTimeSec);
   }
 
-  /** Smoothly ramp a panner node. */
+  /** Set pan — smooth ramp or instant, depending on toggle. */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
+    if (!smoothFadeEnabled) {
+      pannerNode.pan.value = target;
+      return;
+    }
     const now = context.currentTime;
     pannerNode.pan.cancelScheduledValues(now);
     pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
-    pannerNode.pan.linearRampToValueAtTime(target, now + PAN_FADE);
+    pannerNode.pan.linearRampToValueAtTime(target, now + fadeTimeSec * 0.8);
   }
 
   /**
    * Legato / portamento — smooth pitch ratio transitions.
    * Prevents the "bad autotune" effect when pitch detection jitters.
-   * Each voice tracks its current ratio and glides to the new target.
    */
-  const PORTAMENTO_TIME = 0.06; // 60ms glide — natural legato feel
   const voiceCurrentRatios: number[] = new Array(MAX_VOICES).fill(1);
 
   function smoothRatio(voiceIndex: number, shifterNode: AudioWorkletNode, targetRatio: number): void {
+    if (!portamentoEnabled) {
+      voiceCurrentRatios[voiceIndex] = targetRatio;
+      setPitchShiftRatio(shifterNode, targetRatio);
+      return;
+    }
+
     const currentRatio = voiceCurrentRatios[voiceIndex] ?? 1;
-
-    // If the ratio change is tiny (pitch jitter), don't update at all
     const changeCents = Math.abs(1200 * Math.log2(targetRatio / currentRatio));
-    if (changeCents < 5) return; // < 5 cents = jitter, ignore
 
-    // For large jumps (> 1 octave), snap immediately — it's a new note
+    // Below jitter gate — ignore
+    if (changeCents < jitterGateCents) return;
+
+    // Large jump (> 1 octave) — snap immediately
     if (changeCents > 1200) {
       voiceCurrentRatios[voiceIndex] = targetRatio;
       setPitchShiftRatio(shifterNode, targetRatio);
       return;
     }
 
-    // Interpolate: glide from current to target over PORTAMENTO_TIME
-    // Since AudioWorklet params aren't AudioParams, we approximate with
-    // an exponential smooth on the JS side
-    const alpha = 1 - Math.exp(-1 / (PORTAMENTO_TIME * 50)); // 50 updates/sec approx
+    // Glide
+    const alpha = 1 - Math.exp(-1 / (portamentoTimeSec * 50));
     const smoothed = currentRatio + (targetRatio - currentRatio) * alpha;
     voiceCurrentRatios[voiceIndex] = smoothed;
     setPitchShiftRatio(shifterNode, smoothed);
@@ -459,6 +479,13 @@ export async function createAudioPipeline(
     },
     setMinTransposeRatio: (ratio) => {
       minTransposeRatio = Math.max(0.125, Math.min(1, ratio));
+    },
+    setSmoothConfig: (config) => {
+      smoothFadeEnabled = config.fadeEnabled;
+      fadeTimeSec = config.fadeMs / 1000;
+      portamentoEnabled = config.portamentoEnabled;
+      portamentoTimeSec = config.portamentoMs / 1000;
+      jitterGateCents = config.jitterCents;
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),
