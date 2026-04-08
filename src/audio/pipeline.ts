@@ -85,15 +85,15 @@ export async function createAudioPipeline(
 
   // Limiter (DynamicsCompressorNode) to prevent clipping with multiple voices
   const limiter = context.createDynamicsCompressor();
-  limiter.threshold.value = -6;   // start compressing at -6 dB
-  limiter.knee.value = 6;         // soft knee
+  limiter.threshold.value = -12;  // start compressing earlier (-12 dB)
+  limiter.knee.value = 10;        // wide soft knee — gradual onset
   limiter.ratio.value = 20;       // aggressive ratio = limiter behavior
-  limiter.attack.value = 0.001;   // 1ms attack — catch transients fast
-  limiter.release.value = 0.05;   // 50ms release — smooth recovery
+  limiter.attack.value = 0.002;   // 2ms attack — catch transients
+  limiter.release.value = 0.1;    // 100ms release — smoother recovery
 
-  // Master gain
+  // Master gain (conservative to prevent clipping with multi-voice)
   const masterGain = context.createGain();
-  masterGain.gain.value = 0.8;
+  masterGain.gain.value = 0.6;
 
   // Voice paths: shifter → gain → panner → delay → effects
   const voiceShifters: AudioWorkletNode[] = [];
@@ -171,14 +171,15 @@ export async function createAudioPipeline(
   }
 
   /** Fade time in seconds for smooth voice entry/exit. */
-  const FADE_TIME = 0.03; // 30ms — fast enough for real-time, slow enough to avoid clicks
+  const GAIN_FADE = 0.1;  // 100ms — smooth enough to eliminate pops
+  const PAN_FADE = 0.08;  // 80ms
 
   /** Smoothly ramp a gain node instead of jumping. */
   function smoothGain(gainNode: GainNode, target: number): void {
     const now = context.currentTime;
     gainNode.gain.cancelScheduledValues(now);
     gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-    gainNode.gain.linearRampToValueAtTime(target, now + FADE_TIME);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(target, 0.0001), now + GAIN_FADE);
   }
 
   /** Smoothly ramp a panner node. */
@@ -186,7 +187,38 @@ export async function createAudioPipeline(
     const now = context.currentTime;
     pannerNode.pan.cancelScheduledValues(now);
     pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
-    pannerNode.pan.linearRampToValueAtTime(target, now + FADE_TIME);
+    pannerNode.pan.linearRampToValueAtTime(target, now + PAN_FADE);
+  }
+
+  /**
+   * Legato / portamento — smooth pitch ratio transitions.
+   * Prevents the "bad autotune" effect when pitch detection jitters.
+   * Each voice tracks its current ratio and glides to the new target.
+   */
+  const PORTAMENTO_TIME = 0.06; // 60ms glide — natural legato feel
+  const voiceCurrentRatios: number[] = new Array(MAX_VOICES).fill(1);
+
+  function smoothRatio(voiceIndex: number, shifterNode: AudioWorkletNode, targetRatio: number): void {
+    const currentRatio = voiceCurrentRatios[voiceIndex] ?? 1;
+
+    // If the ratio change is tiny (pitch jitter), don't update at all
+    const changeCents = Math.abs(1200 * Math.log2(targetRatio / currentRatio));
+    if (changeCents < 5) return; // < 5 cents = jitter, ignore
+
+    // For large jumps (> 1 octave), snap immediately — it's a new note
+    if (changeCents > 1200) {
+      voiceCurrentRatios[voiceIndex] = targetRatio;
+      setPitchShiftRatio(shifterNode, targetRatio);
+      return;
+    }
+
+    // Interpolate: glide from current to target over PORTAMENTO_TIME
+    // Since AudioWorklet params aren't AudioParams, we approximate with
+    // an exponential smooth on the JS side
+    const alpha = 1 - Math.exp(-1 / (PORTAMENTO_TIME * 50)); // 50 updates/sec approx
+    const smoothed = currentRatio + (targetRatio - currentRatio) * alpha;
+    voiceCurrentRatios[voiceIndex] = smoothed;
+    setPitchShiftRatio(shifterNode, smoothed);
   }
 
   let maxTransposeRatio = 4;    // upper limit (2 oct up)
@@ -251,7 +283,7 @@ export async function createAudioPipeline(
           const reduced = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(reduced, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
+          smoothRatio(i, shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -278,7 +310,7 @@ export async function createAudioPipeline(
           const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
+          smoothRatio(i, shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -308,7 +340,7 @@ export async function createAudioPipeline(
           const targetFreq = midiToFrequency(targetMidi);
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
+          smoothRatio(i, shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
@@ -337,7 +369,7 @@ export async function createAudioPipeline(
         if (voice && voiceConfig) {
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
+          smoothRatio(i, shifter, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
           smoothPan(panner, gp.pan);
         } else {
