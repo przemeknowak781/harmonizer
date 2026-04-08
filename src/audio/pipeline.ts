@@ -388,23 +388,6 @@ export async function createAudioPipeline(
         currentPreset,
       );
 
-      // DEBUG: log once every ~2 seconds
-      if (Math.random() < 0.02) {
-        console.log("[harmony]", {
-          mode: harmonyMode,
-          freq: frequency.toFixed(1),
-          voices: result.voices.map((v, idx) => {
-            const gp = getVoiceState(idx, 0, 0);
-            return {
-              engineRatio: v.ratio.toFixed(3),
-              octShift: gp.octaveShift,
-              finalRatio: applyOctaveShift(v.ratio, gp.octaveShift).toFixed(3),
-              vol: gp.volume.toFixed(2),
-            };
-          }),
-        });
-      }
-
       for (let i = 0; i < MAX_VOICES; i++) {
         const shifter = voiceShifters[i];
         const gain = voiceGains[i];

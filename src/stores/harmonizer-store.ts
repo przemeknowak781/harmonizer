@@ -17,10 +17,10 @@ export interface VoiceState {
 
 function defaultVoiceStates(): VoiceState[] {
   return [
-    { active: true, volume: 0.5, pan: -0.3, octaveShift: -1, cofSteps: 1, cofOctaveReduce: false },
-    { active: true, volume: 0.5, pan: 0.3, octaveShift: -1, cofSteps: -1, cofOctaveReduce: false },
-    { active: true, volume: 0.4, pan: 0, octaveShift: -1, cofSteps: 2, cofOctaveReduce: true },
-    { active: true, volume: 0.35, pan: 0, octaveShift: -2, cofSteps: -2, cofOctaveReduce: true },
+    { active: true, volume: 0.5, pan: -0.4, octaveShift: 0, cofSteps: 1, cofOctaveReduce: false },
+    { active: true, volume: 0.5, pan: 0.4, octaveShift: 0, cofSteps: -1, cofOctaveReduce: false },
+    { active: true, volume: 0.4, pan: -0.2, octaveShift: 0, cofSteps: 2, cofOctaveReduce: true },
+    { active: true, volume: 0.35, pan: 0.2, octaveShift: 0, cofSteps: -2, cofOctaveReduce: true },
   ];
 }
 
@@ -115,8 +115,8 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   currentBeat: 0,
   activeProgression: null,
   voiceStates: defaultVoiceStates(),
-  maxTransposeRatio: 2, // 1 octave up
-  minTransposeRatio: 0.5, // 1 octave down
+  maxTransposeRatio: 4, // 2 octaves up
+  minTransposeRatio: 0.25, // 2 octaves down
   smoothFadeEnabled: true,
   fadeTimeMs: 100,
   portamentoEnabled: true,
