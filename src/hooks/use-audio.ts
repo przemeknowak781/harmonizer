@@ -114,6 +114,8 @@ export function useAudio() {
     pipeline.setDelayTime(delayTime);
     pipeline.setDelayFeedback(delayFeedback);
     pipeline.setDelayMix(delayMix);
+    pipeline.setMaxTransposeRatio(maxTransposeRatio);
+    pipeline.setMinTransposeRatio(minTransposeRatio);
     pipeline.setCustomCofVoices(voiceStates.map((v) => ({
       steps: v.cofSteps,
       octaveReduce: v.cofOctaveReduce,
@@ -142,6 +144,8 @@ export function useAudio() {
     bpm,
     activeProgression,
     voiceStates,
+    maxTransposeRatio,
+    minTransposeRatio,
   ]);
 
   return { start, stop, syncSettings, isReady, error, pipeline: pipelineRef };
