@@ -52,6 +52,7 @@ export function useAudio() {
         volume: v.volume,
         pan: v.pan,
         active: v.active,
+        octaveShift: v.octaveShift,
       })));
       for (let i = 0; i < voiceStates.length; i++) {
         const vs = voiceStates[i];
@@ -113,6 +114,7 @@ export function useAudio() {
       volume: v.volume,
       pan: v.pan,
       active: v.active,
+      octaveShift: v.octaveShift,
     })));
     for (let i = 0; i < voiceStates.length; i++) {
       const vs = voiceStates[i];

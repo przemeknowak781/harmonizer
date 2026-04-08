@@ -8,6 +8,8 @@ export interface VoiceState {
   active: boolean;
   volume: number;
   pan: number;
+  /** Octave transposition: -2 to +2. Applied as ratio × 2^octaveShift */
+  octaveShift: number;
   // Circle of Fifths params
   cofSteps: number;
   cofOctaveReduce: boolean;
@@ -15,10 +17,10 @@ export interface VoiceState {
 
 function defaultVoiceStates(): VoiceState[] {
   return [
-    { active: true, volume: 0.8, pan: -0.3, cofSteps: 1, cofOctaveReduce: false },
-    { active: true, volume: 0.8, pan: 0.3, cofSteps: -1, cofOctaveReduce: false },
-    { active: false, volume: 0.7, pan: 0, cofSteps: 2, cofOctaveReduce: true },
-    { active: false, volume: 0.6, pan: 0, cofSteps: -2, cofOctaveReduce: true },
+    { active: true, volume: 0.8, pan: -0.3, octaveShift: 0, cofSteps: 1, cofOctaveReduce: false },
+    { active: true, volume: 0.8, pan: 0.3, octaveShift: -1, cofSteps: -1, cofOctaveReduce: false },
+    { active: false, volume: 0.7, pan: 0, octaveShift: 0, cofSteps: 2, cofOctaveReduce: true },
+    { active: false, volume: 0.6, pan: 0, octaveShift: 0, cofSteps: -2, cofOctaveReduce: true },
   ];
 }
 
@@ -65,6 +67,7 @@ interface HarmonizerState {
   setVoiceVolume: (index: number, volume: number) => void;
   setVoicePan: (index: number, pan: number) => void;
   setVoiceActive: (index: number, active: boolean) => void;
+  setVoiceOctaveShift: (index: number, shift: number) => void;
   setVoiceCofSteps: (index: number, steps: number) => void;
   setVoiceCofOctaveReduce: (index: number, value: boolean) => void;
   addVoice: () => void;
@@ -132,6 +135,12 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
     set((state) => ({
       voiceStates: state.voiceStates.map((v, i) =>
         i === index ? { ...v, active } : v,
+      ),
+    })),
+  setVoiceOctaveShift: (index, shift) =>
+    set((state) => ({
+      voiceStates: state.voiceStates.map((v, i) =>
+        i === index ? { ...v, octaveShift: clamp(shift, -2, 2) } : v,
       ),
     })),
   setVoiceCofSteps: (index, cofSteps) =>

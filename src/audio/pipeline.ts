@@ -49,7 +49,7 @@ export interface AudioPipeline {
   setDelayTime: (ms: number) => void;
   setDelayFeedback: (fb: number) => void;
   setDelayMix: (v: number) => void;
-  setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean }[]) => void;
+  setCustomCofVoices: (voices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[]) => void;
   getTransport: () => Transport;
   getLooper: () => Looper;
 }
@@ -134,23 +134,32 @@ export async function createAudioPipeline(
   let harmonyMode: "interval" | "chord" | "fifths" | "geometric" = "chord";
   let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
-  let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean }[] = [];
+  let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[] = [];
 
   /**
-   * Get volume/pan for voice i from store state (customCofVoices).
+   * Get volume/pan/octaveShift for voice i from store state.
    * Falls back to preset config if store state not available.
    * Respects active flag — inactive voice = volume 0.
    */
-  function getVoiceGainPan(
+  function getVoiceState(
     i: number,
     fallbackVolume: number,
     fallbackPan: number,
-  ): { volume: number; pan: number } {
+  ): { volume: number; pan: number; octaveShift: number } {
     const sv = customCofVoices[i];
     if (sv) {
-      return { volume: sv.active ? sv.volume : 0, pan: sv.pan };
+      return {
+        volume: sv.active ? sv.volume : 0,
+        pan: sv.pan,
+        octaveShift: (sv as { octaveShift?: number }).octaveShift ?? 0,
+      };
     }
-    return { volume: fallbackVolume, pan: fallbackPan };
+    return { volume: fallbackVolume, pan: fallbackPan, octaveShift: 0 };
+  }
+
+  /** Apply octave shift to a ratio: ratio × 2^shift */
+  function applyOctaveShift(ratio: number, shift: number): number {
+    return ratio * Math.pow(2, shift);
   }
 
   function applyHarmony(frequency: number) {
@@ -170,9 +179,9 @@ export async function createAudioPipeline(
         const voiceConfig = voices[i];
         if (voiceConfig) {
           const ratio = cofRatio(voiceConfig.steps);
-          const finalRatio = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
-          setPitchShiftRatio(shifter, finalRatio);
-          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          const reduced = voiceConfig.octaveReduce ? octaveReduce(ratio) : ratio;
+          const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
+          setPitchShiftRatio(shifter, applyOctaveShift(reduced, gp.octaveShift));
           gain.gain.value = gp.volume;
           panner.pan.value = gp.pan;
         } else {
@@ -202,9 +211,9 @@ export async function createAudioPipeline(
 
         const voice = result.voices[i];
         if (voice) {
-          setPitchShiftRatio(shifter, voice.ratio);
           const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
-          const gp = getVoiceGainPan(i, 0.75, defaultPan);
+          const gp = getVoiceState(i, 0.75, defaultPan);
+          setPitchShiftRatio(shifter, applyOctaveShift(voice.ratio, gp.octaveShift));
           gain.gain.value = gp.volume;
           panner.pan.value = gp.pan;
         } else {
@@ -232,8 +241,8 @@ export async function createAudioPipeline(
         const voiceConfig = currentPreset?.voices[i];
         if (targetMidi !== undefined && voiceConfig) {
           const targetFreq = midiToFrequency(targetMidi);
-          setPitchShiftRatio(shifter, targetFreq / frequency);
-          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
+          setPitchShiftRatio(shifter, applyOctaveShift(targetFreq / frequency, gp.octaveShift));
           gain.gain.value = gp.volume;
           panner.pan.value = gp.pan;
         } else {
@@ -260,8 +269,8 @@ export async function createAudioPipeline(
         const voice = result.voices[i];
         const voiceConfig = currentPreset.voices[i];
         if (voice && voiceConfig) {
-          setPitchShiftRatio(shifter, voice.ratio);
-          const gp = getVoiceGainPan(i, voiceConfig.volume, voiceConfig.pan);
+          const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
+          setPitchShiftRatio(shifter, applyOctaveShift(voice.ratio, gp.octaveShift));
           gain.gain.value = gp.volume;
           panner.pan.value = gp.pan;
         } else {

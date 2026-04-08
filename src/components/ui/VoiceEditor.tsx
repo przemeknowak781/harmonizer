@@ -13,6 +13,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
     dryVolume,
     setVoiceVolume,
     setVoicePan,
+    setVoiceOctaveShift,
     setVoiceCofSteps,
     setVoiceCofOctaveReduce,
     addVoice,
@@ -29,7 +30,7 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
     <div className="flex flex-col gap-3">
       <div className="flex gap-3 overflow-x-auto pb-2">
         {activeVoices.map(
-          ({ index, volume, pan, cofSteps, cofOctaveReduce }) => (
+          ({ index, volume, pan, octaveShift, cofSteps, cofOctaveReduce }) => (
             <div
               key={index}
               className="flex flex-col gap-2 p-3 bg-zinc-900 rounded-lg border border-zinc-800 min-w-36"
@@ -87,6 +88,27 @@ export function VoiceEditor({ pipeline }: VoiceEditorProps) {
                   </label>
                 </div>
               )}
+
+              {/* Octave Shift — all modes */}
+              <label className="flex flex-col gap-1">
+                <div className="flex justify-between">
+                  <span className="text-xs text-zinc-500">Octave</span>
+                  <span className="text-xs text-zinc-400">
+                    {octaveShift > 0 ? "+" : ""}{String(octaveShift)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-2}
+                  max={2}
+                  step={1}
+                  value={octaveShift}
+                  onChange={(e) => {
+                    setVoiceOctaveShift(index, Number(e.target.value));
+                  }}
+                  className="w-full accent-violet-500"
+                />
+              </label>
 
               {/* Volume */}
               <label className="flex flex-col gap-1">
