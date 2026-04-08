@@ -184,31 +184,29 @@ export async function createAudioPipeline(
   let portamentoTimeSec = 0.06; // 60ms default
   let jitterGateCents = 5;     // 5 cents default
 
-  /**
-   * Set gain — uses setTargetAtTime for click-free automation.
-   * IMPORTANT: setTargetAtTime from exactly 0 gets stuck (exponential × 0 = 0).
-   * We kick-start from a tiny epsilon when current value is near zero.
-   */
+  /** Set gain — direct assignment, optionally with simple ramp. */
   function smoothGain(gainNode: GainNode, target: number): void {
-    const now = context.currentTime;
-    if (!smoothFadeEnabled) {
-      gainNode.gain.setValueAtTime(target, now);
+    if (!smoothFadeEnabled || fadeTimeSec < 0.01) {
+      gainNode.gain.value = target;
       return;
     }
-    // Unstick from zero: if current ≈ 0 and target > 0, kick-start
-    if (gainNode.gain.value < 0.001 && target > 0.001) {
-      gainNode.gain.setValueAtTime(0.001, now);
-    }
-    gainNode.gain.setTargetAtTime(target, now, fadeTimeSec / 3);
+    // Simple linear ramp — cancel previous, set current, ramp to target
+    const now = context.currentTime;
+    gainNode.gain.cancelScheduledValues(now);
+    gainNode.gain.setValueAtTime(gainNode.gain.value || 0.001, now);
+    gainNode.gain.linearRampToValueAtTime(Math.max(target, 0.0001), now + fadeTimeSec);
   }
 
-  /** Set pan — setTargetAtTime works fine for pan (range -1 to 1, no zero issue). */
+  /** Set pan — direct or ramped. */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
     if (!smoothFadeEnabled) {
-      pannerNode.pan.setValueAtTime(target, context.currentTime);
+      pannerNode.pan.value = target;
       return;
     }
-    pannerNode.pan.setTargetAtTime(target, context.currentTime, fadeTimeSec / 3);
+    const now = context.currentTime;
+    pannerNode.pan.cancelScheduledValues(now);
+    pannerNode.pan.setValueAtTime(pannerNode.pan.value, now);
+    pannerNode.pan.linearRampToValueAtTime(target, now + fadeTimeSec);
   }
 
   /**
@@ -225,20 +223,20 @@ export async function createAudioPipeline(
     }
 
     const currentRatio = voiceCurrentRatios[voiceIndex] ?? 1;
-    const changeCents = Math.abs(1200 * Math.log2(targetRatio / currentRatio));
 
-    // Below jitter gate — ignore
-    if (changeCents < jitterGateCents) return;
+    // Skip only truly identical values
+    if (Math.abs(targetRatio - currentRatio) < 0.0001) return;
 
     // Large jump (> 1 octave) — snap immediately
+    const changeCents = Math.abs(1200 * Math.log2(targetRatio / currentRatio));
     if (changeCents > 1200) {
       voiceCurrentRatios[voiceIndex] = targetRatio;
       setPitchShiftRatio(shifterNode, targetRatio);
       return;
     }
 
-    // Glide
-    const alpha = 1 - Math.exp(-1 / (portamentoTimeSec * 50));
+    // Glide — always send update, let the worklet's own smoothing handle the rest
+    const alpha = 0.3; // faster convergence
     const smoothed = currentRatio + (targetRatio - currentRatio) * alpha;
     voiceCurrentRatios[voiceIndex] = smoothed;
     setPitchShiftRatio(shifterNode, smoothed);
