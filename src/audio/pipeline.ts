@@ -185,20 +185,24 @@ export async function createAudioPipeline(
   let jitterGateCents = 5;     // 5 cents default
 
   /**
-   * Set gain — uses setTargetAtTime which doesn't need cancelScheduledValues.
-   * It exponentially converges to target without discontinuities,
-   * even when called repeatedly (every ~23ms from pitch detector).
+   * Set gain — uses setTargetAtTime for click-free automation.
+   * IMPORTANT: setTargetAtTime from exactly 0 gets stuck (exponential × 0 = 0).
+   * We kick-start from a tiny epsilon when current value is near zero.
    */
   function smoothGain(gainNode: GainNode, target: number): void {
+    const now = context.currentTime;
     if (!smoothFadeEnabled) {
-      gainNode.gain.setValueAtTime(target, context.currentTime);
+      gainNode.gain.setValueAtTime(target, now);
       return;
     }
-    // timeConstant = time to reach ~63% of the way to target
-    gainNode.gain.setTargetAtTime(target, context.currentTime, fadeTimeSec / 3);
+    // Unstick from zero: if current ≈ 0 and target > 0, kick-start
+    if (gainNode.gain.value < 0.001 && target > 0.001) {
+      gainNode.gain.setValueAtTime(0.001, now);
+    }
+    gainNode.gain.setTargetAtTime(target, now, fadeTimeSec / 3);
   }
 
-  /** Set pan — same approach, no cancel needed. */
+  /** Set pan — setTargetAtTime works fine for pan (range -1 to 1, no zero issue). */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
     if (!smoothFadeEnabled) {
       pannerNode.pan.setValueAtTime(target, context.currentTime);
