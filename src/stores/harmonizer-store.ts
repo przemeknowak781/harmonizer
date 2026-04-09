@@ -47,6 +47,11 @@ interface HarmonizerState {
   voiceStates: VoiceState[];
   /** Max ratio above source before auto-octave-down. 2 = 1 oct, 4 = 2 oct. */
   maxTransposeRatio: number;
+  /** String Ensemble */
+  stringsEnabled: boolean;
+  stringsVolume: number;
+  stringsBrightness: number;
+  stringsAttack: number;
   /** Smooth controls */
   smoothFadeEnabled: boolean;
   fadeTimeMs: number;          // 10–300 ms
@@ -74,6 +79,10 @@ interface HarmonizerState {
   setTransportPlaying: (playing: boolean) => void;
   setCurrentBeat: (beat: number) => void;
   setActiveProgression: (prog: ChordProgression | null) => void;
+  setStringsEnabled: (v: boolean) => void;
+  setStringsVolume: (v: number) => void;
+  setStringsBrightness: (v: number) => void;
+  setStringsAttack: (v: number) => void;
   setVoiceVolume: (index: number, volume: number) => void;
   setVoicePan: (index: number, pan: number) => void;
   setVoiceActive: (index: number, active: boolean) => void;
@@ -117,6 +126,10 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   voiceStates: defaultVoiceStates(),
   maxTransposeRatio: 2, // 1 octave up
   minTransposeRatio: 0.125, // effectively unlimited down
+  stringsEnabled: false,
+  stringsVolume: 0.4,
+  stringsBrightness: 0.5,
+  stringsAttack: 0.2,
   smoothFadeEnabled: true,
   fadeTimeMs: 100,
   portamentoEnabled: true,
@@ -167,6 +180,10 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
         i === index ? { ...v, octaveShift: clamp(shift, -2, 2) } : v,
       ),
     })),
+  setStringsEnabled: (stringsEnabled) => set({ stringsEnabled }),
+  setStringsVolume: (stringsVolume) => set({ stringsVolume: clamp(stringsVolume, 0, 1) }),
+  setStringsBrightness: (stringsBrightness) => set({ stringsBrightness: clamp(stringsBrightness, 0, 1) }),
+  setStringsAttack: (stringsAttack) => set({ stringsAttack: clamp(stringsAttack, 0.01, 1) }),
   setMaxTransposeRatio: (maxTransposeRatio) =>
     set({ maxTransposeRatio: clamp(maxTransposeRatio, 1, 8) }),
   setMinTransposeRatio: (minTransposeRatio) =>

@@ -13,6 +13,7 @@ import { EffectsPanel } from "../ui/EffectsPanel";
 import { LooperControls } from "../ui/LooperControls";
 import { CofPresetSelector } from "../ui/CofPresetSelector";
 import { SmoothingPanel } from "../ui/SmoothingPanel";
+import { StringsPanel } from "../ui/StringsPanel";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -123,9 +124,13 @@ export function MainLayout() {
           </div>
         </div>
 
-        {/* ── RIGHT: Effects + Smoothing + Range ── */}
+        {/* ── RIGHT: Strings + Effects + Smoothing + Range ── */}
         <div className="w-56 shrink-0 bg-[var(--surface)] border-l border-[var(--border-light)] flex flex-col p-2 gap-3 overflow-y-auto">
           <div>
+            <StringsPanel pipeline={pipeline} />
+          </div>
+
+          <div className="border-t border-[var(--border-light)] pt-2">
             <span className="text-[8px] uppercase tracking-widest text-[var(--text-dim)] mb-1 block">Effects</span>
             <EffectsPanel pipeline={pipeline} />
           </div>

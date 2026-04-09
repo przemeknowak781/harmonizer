@@ -26,6 +26,10 @@ export function useAudio() {
     voiceStates,
     maxTransposeRatio,
     minTransposeRatio,
+    stringsEnabled,
+    stringsVolume,
+    stringsBrightness,
+    stringsAttack,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
@@ -55,6 +59,10 @@ export function useAudio() {
       pipeline.setDelayMix(delayMix);
       pipeline.setMaxTransposeRatio(maxTransposeRatio);
       pipeline.setMinTransposeRatio(minTransposeRatio);
+      pipeline.setStringsEnabled(stringsEnabled);
+      pipeline.setStringsVolume(stringsVolume);
+      pipeline.setStringsBrightness(stringsBrightness);
+      pipeline.setStringsAttack(stringsAttack);
       pipeline.setSmoothConfig({
         fadeEnabled: smoothFadeEnabled,
         fadeMs: fadeTimeMs,
@@ -102,6 +110,10 @@ export function useAudio() {
     voiceStates,
     maxTransposeRatio,
     minTransposeRatio,
+    stringsEnabled,
+    stringsVolume,
+    stringsBrightness,
+    stringsAttack,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
@@ -170,6 +182,10 @@ export function useAudio() {
     voiceStates,
     maxTransposeRatio,
     minTransposeRatio,
+    stringsEnabled,
+    stringsVolume,
+    stringsBrightness,
+    stringsAttack,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
