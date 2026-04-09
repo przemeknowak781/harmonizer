@@ -76,6 +76,7 @@ export interface AudioPipeline {
   setOrchestraEnabled: (e: boolean) => void;
   setOrchestraVolume: (v: number) => void;
   setOrchestraSectionEnabled: (section: string, enabled: boolean) => void;
+  setOrchestraPattern: (p: string) => void;
   getOrchestraProgress: () => number;
   isOrchestraLoaded: () => boolean;
   /** Get live pitch ratios per voice (updated every frame). */
@@ -690,6 +691,7 @@ export async function createAudioPipeline(
     setOrchestraEnabled: (e) => orchestra.setEnabled(e),
     setOrchestraVolume: (v) => orchestra.setVolume(v),
     setOrchestraSectionEnabled: (section, e) => orchestra.setSectionEnabled(section, e),
+    setOrchestraPattern: (p) => orchestra.setPattern(p as "sustained" | "arpeggiated" | "tremolo-drama" | "pizz-pulse" | "cinematic"),
     getOrchestraProgress: () => orchestra.getProgress(),
     isOrchestraLoaded: () => orchestra.isLoaded(),
     setStringsEnabled: (e) => stringEnsemble.setEnabled(e),

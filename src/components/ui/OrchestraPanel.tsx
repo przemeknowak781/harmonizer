@@ -8,12 +8,12 @@ interface OrchestraPanelProps {
   pipeline: MutableRefObject<AudioPipeline | null>;
 }
 
-const SECTIONS = [
-  { key: "violin1", label: "Violin I", emoji: "🎻" },
-  { key: "violin2", label: "Violin II", emoji: "🎻" },
-  { key: "viola", label: "Viola", emoji: "🎻" },
-  { key: "cello", label: "Cello", emoji: "🎻" },
-  { key: "contrabass", label: "Bass", emoji: "🎸" },
+const PATTERNS = [
+  { key: "cinematic",      label: "Cinematic" },
+  { key: "sustained",      label: "Chorale" },
+  { key: "arpeggiated",    label: "Arpeggio" },
+  { key: "tremolo-drama",  label: "Tremolo" },
+  { key: "pizz-pulse",     label: "Pizzicato" },
 ] as const;
 
 export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
@@ -21,16 +21,13 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [volume, setVolume] = useState(50);
-  const [sectionState, setSectionState] = useState<Record<string, boolean>>({
-    violin1: true, violin2: true, viola: true, cello: true, contrabass: true,
-  });
+  const [activePattern, setActivePattern] = useState("cinematic");
 
   async function handleEnable(checked: boolean) {
     const p = pipeline.current;
     if (!p) return;
 
     if (checked && !loaded) {
-      // First enable → load samples
       setLoading(true);
       try {
         await p.loadOrchestra();
@@ -52,14 +49,13 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
     pipeline.current?.setOrchestraVolume(v / 100);
   }
 
-  function handleSection(key: string, e: boolean) {
-    setSectionState(prev => ({ ...prev, [key]: e }));
-    pipeline.current?.setOrchestraSectionEnabled(key, e);
+  function handlePattern(key: string) {
+    setActivePattern(key);
+    pipeline.current?.setOrchestraPattern(key);
   }
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Enable toggle */}
       <div className="flex items-center gap-2">
         <input type="checkbox" checked={enabled} disabled={loading}
           onChange={(e) => handleEnable(e.target.checked)} />
@@ -68,7 +64,7 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
         </span>
         {loading && (
           <span className="text-[8px] text-[var(--amber)] animate-pulse ml-auto" style={mono}>
-            Loading samples...
+            Loading...
           </span>
         )}
         {enabled && loaded && (
@@ -84,18 +80,16 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
             <input type="range" min={0} max={100} step={1} value={volume}
               onChange={(e) => handleVolume(Number(e.target.value))}
               className="flex-1" />
-            <span className="text-[9px] text-[var(--text-dim)] w-5 text-right" style={mono}>
-              {volume}
-            </span>
+            <span className="text-[9px] text-[var(--text-dim)] w-5 text-right" style={mono}>{volume}</span>
           </div>
 
-          {/* Section toggles */}
+          {/* Pattern selector */}
           <div className="flex flex-wrap gap-1">
-            {SECTIONS.map(({ key, label }) => (
+            {PATTERNS.map(({ key, label }) => (
               <button key={key}
-                onClick={() => handleSection(key, !sectionState[key])}
-                className={`pill ${sectionState[key] ? "pill-active" : "pill-inactive"}`}
-                style={{ fontSize: "9px", padding: "2px 8px" }}>
+                onClick={() => handlePattern(key)}
+                className={`pill ${activePattern === key ? "pill-active" : "pill-inactive"}`}
+                style={{ fontSize: "8px", padding: "2px 6px" }}>
                 {label}
               </button>
             ))}

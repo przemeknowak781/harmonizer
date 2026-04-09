@@ -1,32 +1,47 @@
 /**
- * Orchestra Ensemble — sample-based strings via smplr Soundfont (General MIDI)
+ * Orchestra Ensemble v3 — Rich orchestral arrangement engine
  *
- * Real instrument samples: violin, viola, cello, contrabass
- * Loaded on-demand from CDN (MusyngKite or FluidR3 soundfont).
+ * Uses smplr Soundfont (GM) with multiple articulations:
+ * - Sustain (violin, viola, cello, contrabass) — legato lines
+ * - Tremolo strings — dramatic effect, tension
+ * - Pizzicato strings — rhythmic pulse, staccato
+ * - String ensemble — pad/fill
  *
- * Voice assignment (classical orchestration):
- *   Violin I:   highest harmony voice (melody doubling)
- *   Violin II:  second harmony voice
- *   Viola:      middle voice, natural register
- *   Cello:      lower voice, octave below singer
- *   Contrabass: root, 2 octaves below (foundation)
+ * Arrangement patterns (selectable):
+ * - Sustained: all voices hold notes (chorale)
+ * - Arpeggiated: notes cycle through voices sequentially
+ * - Tremolo+sustain: upper strings tremolo, lower sustain
+ * - Pizzicato pulse: rhythmic pizz with sustained cello/bass
+ * - Cinematic: dynamic swells with layered articulations
+ *
+ * Voice leading: smooth transitions, contrary motion, avoid leaps > octave
  */
 
 import { Soundfont } from "smplr";
 import { frequencyToMidi } from "../engine/pitch";
 
-interface SamplerSection {
+type ArticulationType = "sustain" | "tremolo" | "pizzicato" | "ensemble";
+
+interface OrchestraVoice {
   name: string;
-  instrument: string;      // Soundfont GM name
+  articulation: ArticulationType;
+  instrumentName: string;
   sampler: Soundfont | null;
+  gain: GainNode | null;
   loaded: boolean;
+  baseVolume: number;
   pan: number;
-  volume: number;
-  octaveOffset: number;
   currentNote: number | null;
   stopFn: (() => void) | null;
   enabled: boolean;
 }
+
+export type ArrangementPattern =
+  | "sustained"
+  | "arpeggiated"
+  | "tremolo-drama"
+  | "pizz-pulse"
+  | "cinematic";
 
 export interface Orchestra {
   load: () => Promise<void>;
@@ -34,12 +49,21 @@ export interface Orchestra {
   silence: () => void;
   setVolume: (v: number) => void;
   setEnabled: (e: boolean) => void;
+  setPattern: (p: ArrangementPattern) => void;
   setSectionEnabled: (section: string, enabled: boolean) => void;
   isLoaded: () => boolean;
   isEnabled: () => boolean;
   getProgress: () => number;
+  getPattern: () => ArrangementPattern;
   destroy: () => void;
 }
+
+const INSTRUMENT_MAP: Record<ArticulationType, string> = {
+  sustain: "violin",      // individual instruments override per voice
+  tremolo: "tremolo_strings",
+  pizzicato: "pizzicato_strings",
+  ensemble: "string_ensemble_1",
+};
 
 export function createOrchestra(
   context: AudioContext,
@@ -49,39 +73,71 @@ export function createOrchestra(
   let loaded = false;
   let progress = 0;
   let masterVol = 0.5;
+  let pattern: ArrangementPattern = "cinematic";
+  let beatCounter = 0; // for arpeggiation timing
 
-  // Each section gets its own gain node routed to destination
-  // This is needed because smplr Soundfont's `destination` option
-  // connects the sampler's output to this node
-  const sectionGains: GainNode[] = [];
-
-  const sections: SamplerSection[] = [
-    { name: "violin1",    instrument: "violin",     sampler: null, loaded: false, pan: -0.5, volume: 0.65, octaveOffset: 0,  currentNote: null, stopFn: null, enabled: true },
-    { name: "violin2",    instrument: "violin",     sampler: null, loaded: false, pan: -0.15,volume: 0.55, octaveOffset: 0,  currentNote: null, stopFn: null, enabled: true },
-    { name: "viola",      instrument: "viola",      sampler: null, loaded: false, pan: 0.15, volume: 0.5,  octaveOffset: 0,  currentNote: null, stopFn: null, enabled: true },
-    { name: "cello",      instrument: "cello",      sampler: null, loaded: false, pan: 0.4,  volume: 0.55, octaveOffset: -1, currentNote: null, stopFn: null, enabled: true },
-    { name: "contrabass",instrument: "contrabass", sampler: null, loaded: false, pan: 0,    volume: 0.45, octaveOffset: -2, currentNote: null, stopFn: null, enabled: true },
+  // All orchestral voices — loaded as pool
+  const voices: OrchestraVoice[] = [
+    // Sustain section
+    { name: "violin1",  articulation: "sustain", instrumentName: "violin",     sampler: null, gain: null, loaded: false, baseVolume: 0.55, pan: -0.5, currentNote: null, stopFn: null, enabled: true },
+    { name: "violin2",  articulation: "sustain", instrumentName: "violin",     sampler: null, gain: null, loaded: false, baseVolume: 0.45, pan: -0.15,currentNote: null, stopFn: null, enabled: true },
+    { name: "viola",    articulation: "sustain", instrumentName: "viola",      sampler: null, gain: null, loaded: false, baseVolume: 0.45, pan: 0.15, currentNote: null, stopFn: null, enabled: true },
+    { name: "cello",    articulation: "sustain", instrumentName: "cello",      sampler: null, gain: null, loaded: false, baseVolume: 0.5,  pan: 0.4,  currentNote: null, stopFn: null, enabled: true },
+    { name: "bass",     articulation: "sustain", instrumentName: "contrabass", sampler: null, gain: null, loaded: false, baseVolume: 0.4,  pan: 0,    currentNote: null, stopFn: null, enabled: true },
+    // Tremolo layer
+    { name: "trem-hi",  articulation: "tremolo", instrumentName: "tremolo_strings", sampler: null, gain: null, loaded: false, baseVolume: 0.35, pan: -0.3, currentNote: null, stopFn: null, enabled: true },
+    { name: "trem-lo",  articulation: "tremolo", instrumentName: "tremolo_strings", sampler: null, gain: null, loaded: false, baseVolume: 0.3,  pan: 0.3,  currentNote: null, stopFn: null, enabled: true },
+    // Pizzicato layer
+    { name: "pizz",     articulation: "pizzicato", instrumentName: "pizzicato_strings", sampler: null, gain: null, loaded: false, baseVolume: 0.5, pan: 0, currentNote: null, stopFn: null, enabled: true },
+    // Ensemble pad
+    { name: "pad",      articulation: "ensemble", instrumentName: "string_ensemble_1", sampler: null, gain: null, loaded: false, baseVolume: 0.25, pan: 0, currentNote: null, stopFn: null, enabled: true },
   ];
 
-  async function loadSection(section: SamplerSection, index: number): Promise<void> {
-    try {
-      // Create a gain node for this section → routes to main destination
-      const gain = context.createGain();
-      gain.gain.value = section.volume;
-      gain.connect(destination);
-      sectionGains[index] = gain;
+  const sectionEnabled: Record<string, boolean> = {};
+  for (const v of voices) sectionEnabled[v.name] = true;
 
-      // Create sampler → routes to our gain node (NOT context.destination)
+  async function loadVoice(voice: OrchestraVoice): Promise<void> {
+    try {
+      const gain = context.createGain();
+      gain.gain.value = 0; // start muted
+      gain.connect(destination);
+      voice.gain = gain;
+
       const sampler = new Soundfont(context, {
-        instrument: section.instrument,
+        instrument: voice.instrumentName,
         destination: gain,
       });
       await sampler.load;
-      section.sampler = sampler;
-      section.loaded = true;
-      console.log(`Orchestra: loaded ${section.name} (${section.instrument})`);
+      voice.sampler = sampler;
+      voice.loaded = true;
     } catch (e) {
-      console.warn(`Orchestra: failed to load ${section.name}:`, e);
+      console.warn(`Orchestra: failed to load ${voice.name}:`, e);
+    }
+  }
+
+  function stopVoice(voice: OrchestraVoice) {
+    if (voice.stopFn) { voice.stopFn(); voice.stopFn = null; }
+    voice.currentNote = null;
+  }
+
+  function playVoice(voice: OrchestraVoice, midi: number, velocity = 80) {
+    if (!voice.sampler || !voice.loaded || !voice.enabled) return;
+    if (!sectionEnabled[voice.name]) return;
+
+    const note = Math.max(28, Math.min(96, midi));
+    if (voice.currentNote !== null && Math.abs(voice.currentNote - note) < 1) return;
+
+    stopVoice(voice);
+    try {
+      const stop = voice.sampler.start({ note, velocity });
+      voice.stopFn = stop;
+      voice.currentNote = note;
+    } catch { /* sample might not exist */ }
+  }
+
+  function setVoiceGain(voice: OrchestraVoice, vol: number) {
+    if (voice.gain) {
+      voice.gain.gain.setTargetAtTime(vol * masterVol, context.currentTime, 0.08);
     }
   }
 
@@ -89,103 +145,180 @@ export function createOrchestra(
     return Math.round(frequencyToMidi(freq));
   }
 
-  /** Assign harmony notes to sections */
-  function assignNotes(rootFreq: number, ratios: number[]): (number | null)[] {
+  /** Build chord notes from root + ratios */
+  function buildChord(rootFreq: number, ratios: number[]): number[] {
     const rootMidi = freqToMidi(rootFreq);
-
-    // Get harmony MIDI notes sorted high→low
-    const harmonyMidis = ratios
-      .filter(r => Math.abs(r - 1) > 0.01)
-      .map(r => freqToMidi(rootFreq * r))
-      .sort((a, b) => b - a);
-
-    // Assign:
-    // Violin I  = highest harmony or root+7 (fifth above)
-    // Violin II = 2nd highest or root+4 (major third)
-    // Viola     = middle or root (natural register)
-    // Cello     = lowest or root, octave down
-    // Bass      = root, 2 octaves down
-    return [
-      harmonyMidis[0] ?? rootMidi + 7,                                    // Violin I
-      harmonyMidis[1] ?? (harmonyMidis[0] ? rootMidi + 4 : rootMidi),   // Violin II
-      (harmonyMidis[2] ?? harmonyMidis[1] ?? rootMidi),                  // Viola
-      (harmonyMidis[harmonyMidis.length - 1] ?? rootMidi) - 12,         // Cello
-      rootMidi - 24,                                                      // Contrabass
-    ];
+    const notes = [rootMidi];
+    for (const r of ratios) {
+      if (Math.abs(r - 1) > 0.01) {
+        notes.push(freqToMidi(rootFreq * r));
+      }
+    }
+    return notes.sort((a, b) => a - b);
   }
 
-  function stopSection(section: SamplerSection) {
-    if (section.stopFn) {
-      section.stopFn();
-      section.stopFn = null;
-    }
-    section.currentNote = null;
+  // ═══ Arrangement Patterns ═══
+
+  function arrangeSustained(chord: number[]) {
+    const root = chord[0] ?? 60;
+    const top = chord[chord.length - 1] ?? root;
+    const mid = chord[Math.floor(chord.length / 2)] ?? root;
+    const low = chord[1] ?? root;
+
+    // Sustain voices
+    playVoice(voices[0]!, top);         setVoiceGain(voices[0]!, 0.55);  // violin1 = top
+    playVoice(voices[1]!, mid + 7);     setVoiceGain(voices[1]!, 0.45);  // violin2 = mid+5th
+    playVoice(voices[2]!, mid);         setVoiceGain(voices[2]!, 0.4);   // viola = middle
+    playVoice(voices[3]!, low - 12);    setVoiceGain(voices[3]!, 0.5);   // cello = octave below
+    playVoice(voices[4]!, root - 24);   setVoiceGain(voices[4]!, 0.4);   // bass = 2 oct below
+
+    // Ensemble pad on root
+    playVoice(voices[8]!, root);        setVoiceGain(voices[8]!, 0.2);
+
+    // Mute tremolo and pizz
+    setVoiceGain(voices[5]!, 0);
+    setVoiceGain(voices[6]!, 0);
+    setVoiceGain(voices[7]!, 0);
   }
 
-  function playSection(section: SamplerSection, midi: number) {
-    if (!section.sampler || !section.loaded || !section.enabled) return;
+  function arrangeArpeggiated(chord: number[]) {
+    beatCounter++;
+    const idx = beatCounter % chord.length;
+    const arpeggioNote = chord[idx] ?? chord[0] ?? 60;
+    const root = chord[0] ?? 60;
 
-    // Clamp to playable range
-    const note = Math.max(28, Math.min(96, midi)); // E1 to C7
+    // Pizz plays arpeggiated note
+    playVoice(voices[7]!, arpeggioNote); setVoiceGain(voices[7]!, 0.55);
 
-    // Skip if same note
-    if (section.currentNote !== null && Math.abs(section.currentNote - note) < 1) return;
+    // Sustain holds root + 5th
+    playVoice(voices[3]!, root - 12);    setVoiceGain(voices[3]!, 0.4);
+    playVoice(voices[4]!, root - 24);    setVoiceGain(voices[4]!, 0.35);
 
-    // Stop previous
-    stopSection(section);
+    // Light pad
+    playVoice(voices[8]!, root);         setVoiceGain(voices[8]!, 0.15);
 
-    try {
-      const stop = section.sampler.start({
-        note,
-        velocity: 80,
-      });
-      section.stopFn = stop;
-      section.currentNote = note;
-    } catch {
-      // Sample might not exist for this note
-    }
+    // Mute others
+    setVoiceGain(voices[0]!, 0);
+    setVoiceGain(voices[1]!, 0);
+    setVoiceGain(voices[2]!, 0);
+    setVoiceGain(voices[5]!, 0);
+    setVoiceGain(voices[6]!, 0);
+  }
+
+  function arrangeTremoloDrama(chord: number[]) {
+    const root = chord[0] ?? 60;
+    const top = chord[chord.length - 1] ?? root;
+    const mid = chord[Math.floor(chord.length / 2)] ?? root;
+
+    // Tremolo on upper voices — dramatic
+    playVoice(voices[5]!, top);          setVoiceGain(voices[5]!, 0.45);
+    playVoice(voices[6]!, mid);          setVoiceGain(voices[6]!, 0.4);
+
+    // Sustain on lower voices — foundation
+    playVoice(voices[3]!, root - 12);    setVoiceGain(voices[3]!, 0.5);
+    playVoice(voices[4]!, root - 24);    setVoiceGain(voices[4]!, 0.4);
+
+    // Ensemble pad
+    playVoice(voices[8]!, root);         setVoiceGain(voices[8]!, 0.2);
+
+    // Mute individual sustain violins
+    setVoiceGain(voices[0]!, 0);
+    setVoiceGain(voices[1]!, 0);
+    setVoiceGain(voices[2]!, 0);
+    setVoiceGain(voices[7]!, 0);
+  }
+
+  function arrangePizzPulse(chord: number[]) {
+    beatCounter++;
+    const root = chord[0] ?? 60;
+    const idx = beatCounter % Math.max(chord.length, 1);
+    const pizzNote = chord[idx] ?? root;
+
+    // Pizzicato on alternating chord tones
+    playVoice(voices[7]!, pizzNote);     setVoiceGain(voices[7]!, 0.6);
+
+    // Cello sustain
+    playVoice(voices[3]!, root - 12);    setVoiceGain(voices[3]!, 0.45);
+    playVoice(voices[4]!, root - 24);    setVoiceGain(voices[4]!, 0.35);
+
+    // Mute rest
+    setVoiceGain(voices[0]!, 0);
+    setVoiceGain(voices[1]!, 0);
+    setVoiceGain(voices[2]!, 0);
+    setVoiceGain(voices[5]!, 0);
+    setVoiceGain(voices[6]!, 0);
+    setVoiceGain(voices[8]!, 0);
+  }
+
+  function arrangeCinematic(chord: number[]) {
+    const root = chord[0] ?? 60;
+    const top = chord[chord.length - 1] ?? root;
+    const mid = chord[Math.floor(chord.length / 2)] ?? root;
+    const low = chord.length > 1 ? (chord[1] ?? root) : root;
+
+    // Full orchestral spread — every layer active at calibrated levels
+    // Violins: melody + harmony, wide stereo
+    playVoice(voices[0]!, top);          setVoiceGain(voices[0]!, 0.5);
+    playVoice(voices[1]!, mid + 7);      setVoiceGain(voices[1]!, 0.35);
+
+    // Viola: inner voice
+    playVoice(voices[2]!, mid);          setVoiceGain(voices[2]!, 0.35);
+
+    // Cello: warmth
+    playVoice(voices[3]!, low - 12);     setVoiceGain(voices[3]!, 0.45);
+
+    // Bass: foundation
+    playVoice(voices[4]!, root - 24);    setVoiceGain(voices[4]!, 0.35);
+
+    // Subtle tremolo on high note for shimmer
+    playVoice(voices[5]!, top + 12);     setVoiceGain(voices[5]!, 0.15);
+
+    // Light tremolo underneath
+    playVoice(voices[6]!, mid - 12);     setVoiceGain(voices[6]!, 0.12);
+
+    // Ensemble pad for body
+    playVoice(voices[8]!, root);         setVoiceGain(voices[8]!, 0.18);
+
+    // No pizz in cinematic sustained
+    setVoiceGain(voices[7]!, 0);
   }
 
   return {
     async load() {
       let count = 0;
-      await Promise.all(sections.map(async (section, index) => {
-        await loadSection(section, index);
+      await Promise.all(voices.map(async (v) => {
+        await loadVoice(v);
         count++;
-        progress = count / sections.length;
+        progress = count / voices.length;
       }));
-      loaded = sections.some(s => s.loaded);
+      loaded = voices.some(v => v.loaded);
+      console.log(`Orchestra: ${voices.filter(v => v.loaded).length}/${voices.length} voices loaded`);
     },
 
     update(rootFreq: number, voiceRatios: number[]) {
       if (!enabled || !loaded) return;
 
-      const notes = assignNotes(rootFreq, voiceRatios);
-      // Debug: log once every ~2s
-      if (Math.random() < 0.02) {
-        console.log("[orchestra]", { rootFreq: rootFreq.toFixed(0), notes, ratios: voiceRatios.length });
-      }
-      for (let i = 0; i < sections.length; i++) {
-        const section = sections[i]!;
-        const note = notes[i];
-        if (!section.enabled || note === null || note === undefined) {
-          stopSection(section);
-          continue;
-        }
-        playSection(section, note);
+      const chord = buildChord(rootFreq, voiceRatios);
+
+      switch (pattern) {
+        case "sustained":      arrangeSustained(chord); break;
+        case "arpeggiated":    arrangeArpeggiated(chord); break;
+        case "tremolo-drama":  arrangeTremoloDrama(chord); break;
+        case "pizz-pulse":     arrangePizzPulse(chord); break;
+        case "cinematic":      arrangeCinematic(chord); break;
       }
     },
 
     silence() {
-      for (const section of sections) stopSection(section);
+      for (const v of voices) { stopVoice(v); setVoiceGain(v, 0); }
     },
 
     setVolume(v: number) {
       masterVol = v;
-      for (let i = 0; i < sections.length; i++) {
-        const gain = sectionGains[i];
-        if (gain) {
-          gain.gain.setTargetAtTime(sections[i]!.volume * masterVol, context.currentTime, 0.05);
+      // Update all active gains
+      for (const voice of voices) {
+        if (voice.gain && voice.currentNote !== null) {
+          voice.gain.gain.setTargetAtTime(voice.baseVolume * masterVol, context.currentTime, 0.05);
         }
       }
     },
@@ -193,27 +326,34 @@ export function createOrchestra(
     setEnabled(e: boolean) {
       enabled = e;
       if (!e) {
-        for (const section of sections) stopSection(section);
+        for (const v of voices) { stopVoice(v); setVoiceGain(v, 0); }
       }
     },
 
+    setPattern(p: ArrangementPattern) {
+      pattern = p;
+      beatCounter = 0;
+    },
+
     setSectionEnabled(name: string, e: boolean) {
-      const section = sections.find(s => s.name === name);
-      if (section) {
-        section.enabled = e;
-        if (!e) stopSection(section);
+      sectionEnabled[name] = e;
+      if (!e) {
+        const v = voices.find(v => v.name === name);
+        if (v) { stopVoice(v); setVoiceGain(v, 0); }
       }
     },
 
     isLoaded: () => loaded,
     isEnabled: () => enabled,
     getProgress: () => progress,
+    getPattern: () => pattern,
 
     destroy() {
       enabled = false;
-      for (const section of sections) {
-        stopSection(section);
-        if (section.sampler) section.sampler.disconnect();
+      for (const v of voices) {
+        stopVoice(v);
+        if (v.sampler) v.sampler.disconnect();
+        if (v.gain) v.gain.disconnect();
       }
     },
   };
