@@ -14,6 +14,7 @@ import { LooperControls } from "../ui/LooperControls";
 import { CofPresetSelector } from "../ui/CofPresetSelector";
 import { SmoothingPanel } from "../ui/SmoothingPanel";
 import { StringsPanel } from "../ui/StringsPanel";
+import { OrchestraPanel } from "../ui/OrchestraPanel";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -127,6 +128,10 @@ export function MainLayout() {
         {/* ── RIGHT: Strings + Effects + Smoothing + Range ── */}
         <div className="w-56 shrink-0 bg-[var(--surface)] border-l border-[var(--border-light)] flex flex-col p-2 gap-3 overflow-y-auto">
           <div>
+            <OrchestraPanel pipeline={pipeline} />
+          </div>
+
+          <div className="border-t border-[var(--border-light)] pt-2">
             <StringsPanel pipeline={pipeline} />
           </div>
 

@@ -26,6 +26,7 @@ import {
 } from "../engine/circle-of-fifths";
 import { AdaptiveHarmony } from "../engine/adaptive-harmony";
 import { createStringEnsemble, type StringEnsemble } from "./string-ensemble";
+import { createOrchestra, type Orchestra } from "./orchestra";
 import { renderOffline, type OfflineVoiceConfig } from "./offline-renderer";
 
 const MAX_VOICES = 4;
@@ -70,6 +71,13 @@ export interface AudioPipeline {
   setStringsVolume: (v: number) => void;
   setStringsBrightness: (b: number) => void;
   setStringsAttack: (s: number) => void;
+  /** Orchestra controls */
+  loadOrchestra: () => Promise<void>;
+  setOrchestraEnabled: (e: boolean) => void;
+  setOrchestraVolume: (v: number) => void;
+  setOrchestraSectionEnabled: (section: string, enabled: boolean) => void;
+  getOrchestraProgress: () => number;
+  isOrchestraLoaded: () => boolean;
   /** Get live pitch ratios per voice (updated every frame). */
   getVoiceRatios: () => number[];
   /** Render a dry recording through all voices offline. Returns stereo mixdown. */
@@ -253,6 +261,9 @@ export async function createAudioPipeline(
 
   // String ensemble — connects to effects chain input (gets reverb/delay too)
   const stringEnsemble: StringEnsemble = createStringEnsemble(context, effectsChain.input);
+
+  // Orchestra — sample-based strings, connects to effects
+  const orchestra: Orchestra = createOrchestra(context, effectsChain.input);
   const transport = new Transport();
   const looper: Looper = createLooper(context);
   source.connect(looper.getNode());
@@ -573,9 +584,26 @@ export async function createAudioPipeline(
           }
           stringEnsemble.update(freqs);
         }
-      } else if (stringEnsemble.isEnabled()) {
-        // No pitch — silence strings
-        stringEnsemble.update([null, null, null, null, null, null]);
+        // Feed orchestra with root + ratios
+        if (orchestra.isEnabled() && orchestra.isLoaded()) {
+          const activeRatios: number[] = [];
+          for (let i = 0; i < MAX_VOICES; i++) {
+            const r = voiceCurrentRatios[i];
+            const cv = customCofVoices[i];
+            if (r && cv?.active && Math.abs(r - 1) > 0.001) {
+              activeRatios.push(r);
+            }
+          }
+          orchestra.update(data.frequency, activeRatios);
+        }
+      } else {
+        // No pitch — silence strings and orchestra
+        if (stringEnsemble.isEnabled()) {
+          stringEnsemble.update([null, null, null, null, null, null]);
+        }
+        if (orchestra.isEnabled()) {
+          orchestra.silence();
+        }
       }
     }
   };
@@ -612,6 +640,7 @@ export async function createAudioPipeline(
       transport.stop();
       looper.clear();
       stringEnsemble.destroy();
+      orchestra.destroy();
       effectsChain.destroy();
       stream.getTracks().forEach((track) => track.stop());
       void context.close();
@@ -657,6 +686,12 @@ export async function createAudioPipeline(
     setDelayMix: (v) => effectsChain.setDelayMix(v),
     getTransport: () => transport,
     getLooper: () => looper,
+    loadOrchestra: () => orchestra.load(),
+    setOrchestraEnabled: (e) => orchestra.setEnabled(e),
+    setOrchestraVolume: (v) => orchestra.setVolume(v),
+    setOrchestraSectionEnabled: (section, e) => orchestra.setSectionEnabled(section, e),
+    getOrchestraProgress: () => orchestra.getProgress(),
+    isOrchestraLoaded: () => orchestra.isLoaded(),
     setStringsEnabled: (e) => stringEnsemble.setEnabled(e),
     setStringsVolume: (v) => stringEnsemble.setVolume(v),
     setStringsBrightness: (b) => stringEnsemble.setBrightness(b),
