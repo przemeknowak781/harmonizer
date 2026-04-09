@@ -50,6 +50,11 @@ export function createOrchestra(
   let progress = 0;
   let masterVol = 0.5;
 
+  // Each section gets its own gain node routed to destination
+  // This is needed because smplr Soundfont's `destination` option
+  // connects the sampler's output to this node
+  const sectionGains: GainNode[] = [];
+
   const sections: SamplerSection[] = [
     { name: "violin1",    instrument: "violin",     sampler: null, loaded: false, pan: -0.5, volume: 0.65, octaveOffset: 0,  currentNote: null, stopFn: null, enabled: true },
     { name: "violin2",    instrument: "violin",     sampler: null, loaded: false, pan: -0.15,volume: 0.55, octaveOffset: 0,  currentNote: null, stopFn: null, enabled: true },
@@ -58,13 +63,18 @@ export function createOrchestra(
     { name: "contrabass",instrument: "contrabass", sampler: null, loaded: false, pan: 0,    volume: 0.45, octaveOffset: -2, currentNote: null, stopFn: null, enabled: true },
   ];
 
-  async function loadSection(section: SamplerSection): Promise<void> {
+  async function loadSection(section: SamplerSection, index: number): Promise<void> {
     try {
-      // Create sampler routed to our destination (effects chain), not default output
+      // Create a gain node for this section → routes to main destination
+      const gain = context.createGain();
+      gain.gain.value = section.volume;
+      gain.connect(destination);
+      sectionGains[index] = gain;
+
+      // Create sampler → routes to our gain node (NOT context.destination)
       const sampler = new Soundfont(context, {
         instrument: section.instrument,
-        destination,
-        volume: Math.round(section.volume * 127),
+        destination: gain,
       });
       await sampler.load;
       section.sampler = sampler;
@@ -127,7 +137,7 @@ export function createOrchestra(
     try {
       const stop = section.sampler.start({
         note,
-        velocity: Math.round(section.volume * masterVol * 127),
+        velocity: 80,
       });
       section.stopFn = stop;
       section.currentNote = note;
@@ -139,8 +149,8 @@ export function createOrchestra(
   return {
     async load() {
       let count = 0;
-      await Promise.all(sections.map(async (section) => {
-        await loadSection(section);
+      await Promise.all(sections.map(async (section, index) => {
+        await loadSection(section, index);
         count++;
         progress = count / sections.length;
       }));
@@ -172,6 +182,12 @@ export function createOrchestra(
 
     setVolume(v: number) {
       masterVol = v;
+      for (let i = 0; i < sections.length; i++) {
+        const gain = sectionGains[i];
+        if (gain) {
+          gain.gain.setTargetAtTime(sections[i]!.volume * masterVol, context.currentTime, 0.05);
+        }
+      }
     },
 
     setEnabled(e: boolean) {
