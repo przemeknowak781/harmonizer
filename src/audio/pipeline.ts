@@ -25,6 +25,9 @@ import {
   type CofPreset,
 } from "../engine/circle-of-fifths";
 import { AdaptiveHarmony } from "../engine/adaptive-harmony";
+import { Autotuner } from "../engine/autotune";
+import { getChordTones } from "../engine/chords";
+import { getScaleNotes } from "../engine/scales";
 import { createStringEnsemble, type StringEnsemble } from "./string-ensemble";
 import { createOrchestra, type Orchestra } from "./orchestra";
 import { renderOffline, type OfflineVoiceConfig } from "./offline-renderer";
@@ -46,7 +49,7 @@ export interface AudioPipeline {
   setVoicePan: (index: number, pan: number) => void;
   getAnalyserNode: () => AnalyserNode;
   destroy: () => void;
-  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric" | "adaptive") => void;
+  setHarmonyMode: (mode: "interval" | "chord" | "fifths" | "geometric" | "adaptive" | "autotune") => void;
   setCofPreset: (name: string) => void;
   setChordProgression: (prog: ChordProgression | null) => void;
   setRhythmPattern: (patternName: string, bpm: number) => void;
@@ -259,6 +262,18 @@ export async function createAudioPipeline(
   const voiceLeader = new VoiceLeader(MAX_VOICES);
   const melodyAnalyzer = new MelodyAnalyzer();
   const adaptiveHarmony = new AdaptiveHarmony();
+  const autotuner = new Autotuner();
+
+  function getAutotuneTargets(): number[] {
+    if (activeProgression) {
+      const chord = getChordAtBeat(
+        activeProgression,
+        transport.getCurrentBeat(),
+      );
+      return getChordTones(chord);
+    }
+    return getScaleNotes(currentRoot, currentMode);
+  }
 
   // String ensemble — connects to effects chain input (gets reverb/delay too)
   const stringEnsemble: StringEnsemble = createStringEnsemble(context, effectsChain.input);
@@ -273,7 +288,7 @@ export async function createAudioPipeline(
   let currentRoot: NoteName = "C";
   let currentMode: ModeName = "major";
   let currentPreset: HarmonyPreset | null = null;
-  let harmonyMode: "interval" | "chord" | "fifths" | "geometric" | "adaptive" = "chord";
+  let harmonyMode: "interval" | "chord" | "fifths" | "geometric" | "adaptive" | "autotune" = "chord";
   let currentCofPreset: CofPreset = COF_PRESETS[0]!;
   let activeProgression: ChordProgression | null = null;
   let customCofVoices: { steps: number; octaveReduce: boolean; volume: number; pan: number; active: boolean; octaveShift: number }[] = [];
@@ -390,6 +405,34 @@ export async function createAudioPipeline(
 
   function applyHarmony(frequency: number) {
     if (frequency <= 0) return;
+
+    if (harmonyMode === "autotune") {
+      const activeCount = customCofVoices.filter((v) => v.active).length || 1;
+      const result = autotuner.compute(frequency, getAutotuneTargets(), activeCount);
+
+      let voiceIdx = 0;
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const shifter = voiceShifters[i];
+        const gain = voiceGains[i];
+        const panner = voicePanners[i];
+        if (!shifter || !gain || !panner) continue;
+
+        const cv = customCofVoices[i];
+        const v = result.voices[voiceIdx];
+        if (cv && cv.active && v) {
+          const finalRatio = applyOctaveShift(v.ratio, cv.octaveShift);
+          smoothRatio(i, shifter, finalRatio);
+          const feq = voiceFormantEQs[i];
+          if (feq) updateFormantEQ(feq, finalRatio);
+          smoothGain(gain, cv.volume * formantRolloff(finalRatio));
+          smoothPan(panner, cv.pan);
+          voiceIdx++;
+        } else {
+          smoothGain(gain, 0);
+        }
+      }
+      return;
+    }
 
     if (harmonyMode === "adaptive") {
       // Count active voices
@@ -651,6 +694,7 @@ export async function createAudioPipeline(
       if (mode === "chord") voiceLeader.reset();
       if (mode === "geometric") melodyAnalyzer.reset();
       if (mode === "adaptive") adaptiveHarmony.reset();
+      if (mode === "autotune") autotuner.reset();
     },
     setCofPreset: (name) => {
       const found = COF_PRESETS.find((p) => p.name === name);
@@ -711,12 +755,33 @@ export async function createAudioPipeline(
         offlineVoices.push({ volume: cv.volume, pan: cv.pan });
       }
 
+      const offlineAutotuner = new Autotuner();
+
       // computeRatios: called per-block with detected frequency
       // Runs the SAME harmony logic as applyHarmony but returns ratios
       const computeRatios = (frequency: number): number[] => {
         const ratios: number[] = [];
 
-        if (harmonyMode === "adaptive") {
+        if (harmonyMode === "autotune") {
+          const result = offlineAutotuner.compute(
+            frequency,
+            getAutotuneTargets(),
+            activeIndices.length,
+          );
+          for (let v = 0; v < activeIndices.length; v++) {
+            const idx = activeIndices[v]!;
+            const cv = customCofVoices[idx];
+            const av = result.voices[v];
+            if (av && cv) {
+              let r = av.ratio * Math.pow(2, cv.octaveShift);
+              while (r > maxTransposeRatio) r /= 2;
+              while (r < minTransposeRatio) r *= 2;
+              ratios.push(r);
+            } else {
+              ratios.push(1);
+            }
+          }
+        } else if (harmonyMode === "adaptive") {
           const result = adaptiveHarmony.compute(frequency, activeIndices.length);
           for (let v = 0; v < activeIndices.length; v++) {
             const idx = activeIndices[v]!;

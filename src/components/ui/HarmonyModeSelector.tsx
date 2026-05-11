@@ -1,13 +1,15 @@
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
 
 const MODES: {
-  value: "interval" | "chord" | "fifths" | "geometric";
+  value: "interval" | "chord" | "fifths" | "geometric" | "adaptive" | "autotune";
   label: string;
 }[] = [
   { value: "interval", label: "Interval" },
   { value: "chord", label: "Chord" },
+  { value: "autotune", label: "Autotune" },
   { value: "fifths", label: "Circle of 5ths" },
   { value: "geometric", label: "Geometric JI" },
+  { value: "adaptive", label: "Adaptive" },
 ];
 
 export function HarmonyModeSelector() {
