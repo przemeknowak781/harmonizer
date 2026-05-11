@@ -58,13 +58,6 @@ export interface Orchestra {
   destroy: () => void;
 }
 
-const INSTRUMENT_MAP: Record<ArticulationType, string> = {
-  sustain: "violin",      // individual instruments override per voice
-  tremolo: "tremolo_strings",
-  pizzicato: "pizzicato_strings",
-  ensemble: "string_ensemble_1",
-};
-
 export function createOrchestra(
   context: AudioContext,
   destination: AudioNode,
