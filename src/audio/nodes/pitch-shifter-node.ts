@@ -1,10 +1,10 @@
+import pitchShifterWorkletUrl from "../worklets/pitch-shifter.worklet.ts?worker&url";
+
 const moduleLoadedContexts = new WeakSet<AudioContext>();
 
 export async function ensurePitchShifterModule(context: AudioContext): Promise<void> {
   if (moduleLoadedContexts.has(context)) return;
-  await context.audioWorklet.addModule(
-    new URL("../worklets/pitch-shifter.worklet.ts", import.meta.url),
-  );
+  await context.audioWorklet.addModule(pitchShifterWorkletUrl);
   moduleLoadedContexts.add(context);
 }
 
