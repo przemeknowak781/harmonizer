@@ -30,17 +30,17 @@ export function MainLayout() {
     setHarmonyMode,
   } = useHarmonizerStore();
 
-  const { start, stop, syncSettings, isReady: _isReady, error, pipeline } = useAudio();
+  const { start, stop, syncSettings, resetState, isReady: _isReady, error, pipeline } = useAudio();
 
   useEffect(() => { syncSettings(); }, [key, presetName, harmonyMode, syncSettings]);
 
-  // Auto-start on first interaction + clean stop/start cycle when key, preset
-  // or harmony mode changes (so all internal pipeline state refreshes — e.g.
-  // voice leader, autotuner, smoothed ratios — instead of carrying over).
+  // Auto-start on first interaction + in-place pipeline reset when key,
+  // preset or harmony mode changes (resets harmony engines, snaps legato to
+  // unison, silences orchestra/strings, then re-pushes every store value).
   useAutoRestart({
     signature: `${key.root}|${key.mode}|${presetName}|${harmonyMode}`,
     start,
-    stop,
+    onReset: resetState,
   });
 
   const analyser = pipeline.current?.getAnalyserNode() ?? null;

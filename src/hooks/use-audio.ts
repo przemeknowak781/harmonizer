@@ -18,6 +18,8 @@ export function useAudio() {
   const {
     key,
     presetName,
+    masterVolume,
+    dryVolume,
     harmonyMode,
     cofPresetName,
     rhythmPattern,
@@ -172,6 +174,8 @@ export function useAudio() {
     pipeline.setCofPreset(cofPresetName);
     pipeline.setChordProgression(activeProgression);
     pipeline.setRhythmPattern(rhythmPattern, bpm);
+    pipeline.setMasterVolume(masterVolume);
+    pipeline.setDryVolume(dryVolume);
     pipeline.setReverbMix(reverbMix);
     pipeline.setDelayTime(delayTime);
     pipeline.setDelayFeedback(delayFeedback);
@@ -185,6 +189,19 @@ export function useAudio() {
       portamentoMs: portamentoTimeMs,
       jitterCents: jitterGateCents,
     });
+    pipeline.setStringsEnabled(stringsEnabled);
+    pipeline.setStringsVolume(stringsVolume);
+    pipeline.setStringsBrightness(stringsBrightness);
+    pipeline.setStringsAttack(stringsAttack);
+    // Orchestra: push current desired enable/volume/pattern to the pipeline.
+    // Loading is owned by useAudio.start (and the OrchestraPanel handles
+    // explicit user toggles); here we just keep an already-loaded pipeline in
+    // step with the store.
+    if (pipeline.isOrchestraLoaded()) {
+      pipeline.setOrchestraEnabled(orchestraEnabled);
+      pipeline.setOrchestraVolume(orchestraVolume);
+      pipeline.setOrchestraPattern(orchestraPattern);
+    }
     pipeline.setCustomCofVoices(voiceStates.map((v) => ({
       steps: v.cofSteps,
       octaveReduce: v.cofOctaveReduce,
@@ -203,6 +220,8 @@ export function useAudio() {
   }, [
     key,
     presetName,
+    masterVolume,
+    dryVolume,
     harmonyMode,
     cofPresetName,
     rhythmPattern,
@@ -229,5 +248,22 @@ export function useAudio() {
     jitterGateCents,
   ]);
 
-  return { start, stop, syncSettings, isReady, error, pipeline: pipelineRef };
+  /**
+   * Synchronous in-place reset used when the user switches style / preset /
+   * key / harmony mode. The previous implementation did `stop() + start()`,
+   * which (a) briefly flipped `isListening` false — flashing the big START
+   * overlay — and (b) raced when a second restart arrived while the first
+   * was still awaiting `getUserMedia`, dropping the second start's settings.
+   * `softReset` resets the pipeline's harmony engines and silences the wet
+   * channels without touching the AudioContext; `syncSettings` then pushes
+   * the current store values back in.
+   */
+  const resetState = useCallback(() => {
+    const pipeline = pipelineRef.current;
+    if (!pipeline) return;
+    pipeline.softReset();
+    syncSettings();
+  }, [syncSettings]);
+
+  return { start, stop, syncSettings, resetState, isReady, error, pipeline: pipelineRef };
 }

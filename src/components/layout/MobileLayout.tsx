@@ -98,7 +98,7 @@ export function MobileLayout() {
     setHarmonyMode,
   } = useHarmonizerStore();
 
-  const { start, stop, syncSettings, error, pipeline } = useAudio();
+  const { start, stop, syncSettings, resetState, error, pipeline } = useAudio();
   const [activeTab, setActiveTab] = useState<TabId>("voices");
 
   useEffect(() => { syncSettings(); }, [key, presetName, harmonyMode, syncSettings]);
@@ -106,7 +106,7 @@ export function MobileLayout() {
   useAutoRestart({
     signature: `${key.root}|${key.mode}|${presetName}|${harmonyMode}`,
     start,
-    stop,
+    onReset: resetState,
   });
 
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
