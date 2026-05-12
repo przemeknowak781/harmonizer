@@ -12,7 +12,7 @@ describe("PitchDisplay", () => {
 
   it("shows cents offset", () => {
     render(<PitchDisplay frequency={440} confidence={0.95} />);
-    expect(screen.getByText("0¢")).toBeInTheDocument();
+    expect(screen.getByText("+0¢")).toBeInTheDocument();
   });
 
   it("shows dash when no pitch detected", () => {

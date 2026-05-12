@@ -15,6 +15,7 @@ import { CofPresetSelector } from "../ui/CofPresetSelector";
 import { SmoothingPanel } from "../ui/SmoothingPanel";
 import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
+import { StylePicker } from "../ui/StylePicker";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -103,6 +104,12 @@ export function MainLayout() {
 
           {/* Config strip — below pitch, always visible */}
           <div className="shrink-0 px-3 py-2 bg-[var(--surface)] border-t border-[var(--border-light)] flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "45%" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] uppercase tracking-widest text-[var(--text-dim)] w-12 shrink-0">Style</span>
+              <div className="flex-1 min-w-0">
+                <StylePicker onApply={syncSettings} />
+              </div>
+            </div>
             {harmonyMode === "adaptive" ? (
               <div className="text-[10px] text-[var(--text-dim)] italic py-1">
                 Adaptive mode — harmony follows your melody automatically
