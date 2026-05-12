@@ -317,6 +317,10 @@ export async function createAudioPipeline(
 
   // --- Configurable smoothing parameters (stored for UI round-trip) ---
   let portamentoEnabled = true;
+  let portamentoMs = 60;
+  // Pitch detector hops every BUFFER_SIZE/2 = 1024 samples → ~23 ms @ 44.1 kHz.
+  // Used as dt in the first-order low-pass below.
+  const SMOOTH_TICK_MS = 23;
 
   /** Set gain — direct assignment. */
   function smoothGain(gainNode: GainNode, target: number): void {
@@ -330,12 +334,18 @@ export async function createAudioPipeline(
 
   /**
    * Legato / portamento — smooth pitch ratio transitions.
-   * Prevents the "bad autotune" effect when pitch detection jitters.
+   *
+   * Applied to every harmony path so that chord changes, voice-leading hops,
+   * mode switches and pitch-detection jitter all glide instead of snapping.
+   * Uses a first-order low-pass with time constant = portamentoMs:
+   *     alpha = 1 - exp(-dt / tau)
+   * so a larger portamentoMs → slower glide. Jumps greater than one octave
+   * snap immediately (no minute-long swoops on octave shifts).
    */
   const voiceCurrentRatios: number[] = new Array(MAX_VOICES).fill(1);
 
   function smoothRatio(voiceIndex: number, shifterNode: AudioWorkletNode, targetRatio: number): void {
-    if (!portamentoEnabled) {
+    if (!portamentoEnabled || portamentoMs <= 0) {
       voiceCurrentRatios[voiceIndex] = targetRatio;
       setPitchShiftRatio(shifterNode, targetRatio);
       return;
@@ -343,10 +353,8 @@ export async function createAudioPipeline(
 
     const currentRatio = voiceCurrentRatios[voiceIndex] ?? 1;
 
-    // Skip only truly identical values
     if (Math.abs(targetRatio - currentRatio) < 0.0001) return;
 
-    // Large jump (> 1 octave) — snap immediately
     const changeCents = Math.abs(1200 * Math.log2(targetRatio / currentRatio));
     if (changeCents > 1200) {
       voiceCurrentRatios[voiceIndex] = targetRatio;
@@ -354,9 +362,14 @@ export async function createAudioPipeline(
       return;
     }
 
-    // Glide — always send update, let the worklet's own smoothing handle the rest
-    const alpha = 0.3; // faster convergence
-    const smoothed = currentRatio + (targetRatio - currentRatio) * alpha;
+    const alpha = 1 - Math.exp(-SMOOTH_TICK_MS / portamentoMs);
+    let smoothed = currentRatio + (targetRatio - currentRatio) * alpha;
+
+    // Snap when within ~0.5 cents to avoid floating-point tails
+    if (Math.abs(1200 * Math.log2(smoothed / targetRatio)) < 0.5) {
+      smoothed = targetRatio;
+    }
+
     voiceCurrentRatios[voiceIndex] = smoothed;
     setPitchShiftRatio(shifterNode, smoothed);
   }
@@ -456,8 +469,7 @@ export async function createAudioPipeline(
           while (ratio > maxTransposeRatio) ratio /= 2;
           while (ratio < minTransposeRatio) ratio *= 2;
 
-          setPitchShiftRatio(shifter, ratio);
-          voiceCurrentRatios[i] = ratio;
+          smoothRatio(i, shifter, ratio);
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, ratio);
           smoothGain(gain, cv.volume * formantRolloff(ratio));
@@ -483,8 +495,7 @@ export async function createAudioPipeline(
           const ratio = cofRatio(cv.steps);
           const reduced = cv.octaveReduce ? octaveReduce(ratio) : ratio;
           const finalRatio = applyOctaveShift(reduced, cv.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
-          voiceCurrentRatios[i] = finalRatio;
+          smoothRatio(i, shifter, finalRatio);
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, cv.volume * formantRolloff(finalRatio));
@@ -527,8 +538,7 @@ export async function createAudioPipeline(
           const defaultPan = i === 0 ? -0.4 : i === 1 ? 0.4 : i === 2 ? 0 : -0.2;
           const gp = getVoiceState(i, 0.75, defaultPan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
-          voiceCurrentRatios[i] = finalRatio;
+          smoothRatio(i, shifter, finalRatio);
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -560,8 +570,7 @@ export async function createAudioPipeline(
           const targetFreq = midiToFrequency(targetMidi);
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(targetFreq / frequency, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
-          voiceCurrentRatios[i] = finalRatio;
+          smoothRatio(i, shifter, finalRatio);
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -592,8 +601,7 @@ export async function createAudioPipeline(
         if (voice && voiceConfig) {
           const gp = getVoiceState(i, voiceConfig.volume, voiceConfig.pan);
           const finalRatio = applyOctaveShift(voice.ratio, gp.octaveShift);
-          setPitchShiftRatio(shifter, finalRatio);
-          voiceCurrentRatios[i] = finalRatio;
+          smoothRatio(i, shifter, finalRatio);
           const feq = voiceFormantEQs[i];
           if (feq) updateFormantEQ(feq, finalRatio);
           smoothGain(gain, gp.volume * formantRolloff(finalRatio));
@@ -732,6 +740,7 @@ export async function createAudioPipeline(
     },
     setSmoothConfig: (config) => {
       portamentoEnabled = config.portamentoEnabled;
+      portamentoMs = Math.max(1, config.portamentoMs);
     },
     setReverbMix: (v) => effectsChain.setReverbMix(v),
     setDelayTime: (ms) => effectsChain.setDelayTime(ms),
