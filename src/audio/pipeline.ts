@@ -91,6 +91,7 @@ export interface AudioPipeline {
 
 export async function createAudioPipeline(
   onPitch: PitchCallback,
+  onTransportStateChange?: (playing: boolean) => void,
 ): Promise<AudioPipeline> {
   const context = new AudioContext({ sampleRate: 44100 });
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -623,6 +624,18 @@ export async function createAudioPipeline(
   }
 
   // Single pitch handler: update UI + apply harmony
+  //
+  // Transport auto-start: when a confident pitch arrives after a brief silence
+  // gap (≥ SILENCE_GAP_SEC) and a chord progression is loaded but the transport
+  // isn't running, kick it off — so the chord sequence picks up the singer
+  // automatically without a separate Play tap. We notify React via the
+  // callback so the UI state stays consistent. Manual transport control still
+  // works; auto-start just fills in the "user already opened mic, hit a note,
+  // expected progression to follow" case.
+  let lastConfidentPitchTime = -Infinity;
+  const SILENCE_GAP_SEC = 0.5;  // brief gap → counts as new phrase for auto-start
+  const SILENCE_STOP_SEC = 1.0; // sustained silence → rewind transport to beat 0
+
   pitchDetector.port.onmessage = (event: MessageEvent) => {
     const data = event.data as {
       type: string;
@@ -632,6 +645,20 @@ export async function createAudioPipeline(
     if (data.type === "pitch") {
       onPitch(data.frequency, data.confidence);
       if (data.confidence > 0.8 && data.frequency > 0) {
+        const now = context.currentTime;
+        const wasSilent = now - lastConfidentPitchTime > SILENCE_GAP_SEC;
+        lastConfidentPitchTime = now;
+
+        if (
+          wasSilent &&
+          !transport.isPlaying &&
+          (harmonyMode === "chord" || harmonyMode === "geometric") &&
+          activeProgression
+        ) {
+          transport.start();
+          onTransportStateChange?.(true);
+        }
+
         applyHarmony(data.frequency);
 
         // In autotune mode the first active voice IS the snapped lead, so the
@@ -666,12 +693,21 @@ export async function createAudioPipeline(
           orchestra.update(rootFreq, harmonyRatios);
         }
       } else {
-        // No pitch — silence strings and orchestra
+        // No pitch — silence strings and orchestra, and auto-stop the
+        // transport after a second of continued silence so the chord
+        // progression rewinds when the phrase ends.
         if (stringEnsemble.isEnabled()) {
           stringEnsemble.update([null, null, null, null, null, null]);
         }
         if (orchestra.isEnabled()) {
           orchestra.silence();
+        }
+        if (
+          transport.isPlaying &&
+          context.currentTime - lastConfidentPitchTime > SILENCE_STOP_SEC
+        ) {
+          transport.stop();
+          onTransportStateChange?.(false);
         }
       }
     }

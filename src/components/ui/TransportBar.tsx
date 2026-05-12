@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useHarmonizerStore } from "../../stores/harmonizer-store";
 import type { AudioPipeline } from "../../audio/pipeline";
 
@@ -19,54 +19,45 @@ export function TransportBar({ pipeline }: TransportBarProps) {
     setCurrentBeat,
   } = useHarmonizerStore();
 
-  const beatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function handlePlay() {
+  // Poll the transport for beat updates whenever it's playing. This effect
+  // covers both manual Play and the pipeline's auto-start — anyone who flips
+  // `isTransportPlaying` to true gets the beat indicator moving.
+  useEffect(() => {
+    if (!isTransportPlaying) return;
     const transport = pipeline.current?.getTransport();
     if (!transport) return;
+
     transport.onBeat = (beat) => setCurrentBeat(beat);
-    transport.start();
-    setTransportPlaying(true);
-    beatTimerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       setCurrentBeat(Math.floor(transport.getCurrentBeat()));
     }, 50);
+
+    return () => {
+      clearInterval(timer);
+      transport.onBeat = null;
+    };
+  }, [isTransportPlaying, pipeline, setCurrentBeat]);
+
+  function handlePlay() {
+    pipeline.current?.getTransport().start();
+    setTransportPlaying(true);
   }
 
   function handlePause() {
-    const transport = pipeline.current?.getTransport();
-    if (!transport) return;
-    transport.pause();
+    pipeline.current?.getTransport().pause();
     setTransportPlaying(false);
-    if (beatTimerRef.current) {
-      clearInterval(beatTimerRef.current);
-      beatTimerRef.current = null;
-    }
   }
 
   function handleStop() {
-    const transport = pipeline.current?.getTransport();
-    if (!transport) return;
-    transport.stop();
+    pipeline.current?.getTransport().stop();
     setTransportPlaying(false);
     setCurrentBeat(0);
-    if (beatTimerRef.current) {
-      clearInterval(beatTimerRef.current);
-      beatTimerRef.current = null;
-    }
   }
 
   function handleBpmChange(newBpm: number) {
     setBpm(newBpm);
     pipeline.current?.getTransport().setBpm(newBpm);
   }
-
-  useEffect(() => {
-    return () => {
-      if (beatTimerRef.current) {
-        clearInterval(beatTimerRef.current);
-      }
-    };
-  }, []);
 
   const beatInMeasure = Math.floor(currentBeat) % 4;
   const btn = "px-2 py-0.5 rounded text-[10px] font-bold transition-all";
