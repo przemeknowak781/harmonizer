@@ -85,6 +85,16 @@ export interface AudioPipeline {
   isOrchestraEnabled: () => boolean;
   /** Get live pitch ratios per voice (updated every frame). */
   getVoiceRatios: () => number[];
+  /**
+   * Snap the pipeline's mutable internal state back to a fresh-start condition
+   * without destroying the AudioContext. Resets all harmony-engine instances
+   * (voice leader, autotuner, adaptive harmony, melody analyzer), clears the
+   * legato glide buffer, silences orchestra/strings, rewinds the transport,
+   * and re-arms the silence-gap auto-start gate. Used by the style/preset
+   * switcher to give a clean slate without the audible gap of a full
+   * stop()+start() restart.
+   */
+  softReset: () => void;
   /** Render a dry recording through all voices offline. Returns stereo mixdown. */
   renderRecording: (dryBuffer: AudioBuffer) => AudioBuffer;
 }
@@ -806,6 +816,29 @@ export async function createAudioPipeline(
     setStringsBrightness: (b) => stringEnsemble.setBrightness(b),
     setStringsAttack: (s) => stringEnsemble.setAttack(s),
     getVoiceRatios: () => [...voiceCurrentRatios],
+    softReset: () => {
+      voiceLeader.reset();
+      melodyAnalyzer.reset();
+      adaptiveHarmony.reset();
+      autotuner.reset();
+      // Snap the legato glide buffer back to unison so the next applyHarmony
+      // tick starts from a clean ratio for every voice.
+      for (let i = 0; i < MAX_VOICES; i++) {
+        voiceCurrentRatios[i] = 1;
+      }
+      // Cut any in-flight orchestra/strings notes — they'll catch up on the
+      // next pitch callback once the harmony engine has the new chord.
+      orchestra.silence();
+      if (stringEnsemble.isEnabled()) {
+        stringEnsemble.update([null, null, null, null, null, null]);
+      }
+      // Rewind the transport so chord progressions start from the top after
+      // a style switch, and re-arm the silence-gap auto-start gate so the
+      // next confident pitch kicks the transport.
+      transport.stop();
+      onTransportStateChange?.(false);
+      lastConfidentPitchTime = -Infinity;
+    },
     renderRecording: (dryBuffer: AudioBuffer): AudioBuffer => {
       // Collect active voice configs (volume/pan only — ratio computed per-block)
       const offlineVoices: OfflineVoiceConfig[] = [];

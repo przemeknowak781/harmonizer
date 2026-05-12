@@ -3,13 +3,21 @@ import { useHarmonizerStore } from "../stores/harmonizer-store";
 
 interface UseAutoRestartParams {
   /**
-   * A serialized signature of the fields that should trigger a full pipeline
-   * restart when they change (e.g. `${key.root}|${key.mode}|${preset}|${mode}`).
-   * Different value than the previous render = restart cycle.
+   * Serialized signature of the fields that should trigger an in-place reset
+   * when they change (e.g. `${key.root}|${key.mode}|${preset}|${mode}`).
+   * Different value than the previous render = reset.
    */
   signature: string;
   start: () => Promise<void> | void;
-  stop: () => void;
+  /**
+   * Called synchronously whenever the signature changes while the mic is
+   * live. The previous implementation did `stop() + start()` here, but that
+   * (a) flashed the big START overlay during the destroy/recreate gap and
+   * (b) raced on rapid switches because the second start was dropped by the
+   * `startingRef` guard while the first was still awaiting getUserMedia.
+   * An in-place reset side-steps both bugs.
+   */
+  onReset: () => void;
 }
 
 /**
@@ -23,13 +31,13 @@ interface UseAutoRestartParams {
  *     After that first fire the listener is removed; subsequent state
  *     transitions (manual start/stop via the mic toggle) take over.
  *
- *  2. **Restart pipeline on key/preset/mode change.** The user reported that
- *     some sliders don't refresh after switching modes or presets — even
- *     though `syncSettings` runs, the pipeline's internal state can carry
- *     over stale values. Doing a `stop() + start()` cycle (debounced 50 ms
- *     to coalesce multi-field updates from `applyStyle`) gives a clean slate.
+ *  2. **Reset pipeline on key/preset/mode change.** When the user switches
+ *     style or preset, the pipeline's internal harmony state (voice leader,
+ *     autotuner, smoothed ratios) is reset in place via `onReset` so the
+ *     new harmony engine config takes effect cleanly. Synchronous + safe to
+ *     fire repeatedly (idempotent), so rapid style switches all land.
  */
-export function useAutoRestart({ signature, start, stop }: UseAutoRestartParams) {
+export function useAutoRestart({ signature, start, onReset }: UseAutoRestartParams) {
   const autoStartTriggeredRef = useRef(false);
   const lastSigRef = useRef<string | null>(null);
 
@@ -58,10 +66,6 @@ export function useAutoRestart({ signature, start, stop }: UseAutoRestartParams)
 
     if (!useHarmonizerStore.getState().isListening) return;
 
-    const timer = setTimeout(() => {
-      stop();
-      void start();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [signature, start, stop]);
+    onReset();
+  }, [signature, onReset]);
 }
