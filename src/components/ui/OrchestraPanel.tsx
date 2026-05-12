@@ -17,32 +17,60 @@ const PATTERNS = [
   { key: "pizz-pulse",     label: "Pizzicato" },
 ] as const;
 
+/**
+ * Orchestra controls.
+ *
+ * `enabled`, `volume` and `activePattern` live in the global store so they
+ * persist across panel re-mounts (mobile tab switches), pipeline restarts,
+ * and so the app can launch with a pre-configured default (orchestra on,
+ * Tremolo pattern, 0.72 volume). `loaded` and `loading` stay local since
+ * they're transient pipeline-derived state.
+ *
+ * On mic START, `useAudio` consults the store and async-loads the orchestra
+ * if it's enabled — so the user gets immediate mic feedback while samples
+ * stream in. This panel resyncs `loaded` from the pipeline whenever
+ * isListening flips, so the UI shows the correct "Loading..." / "ON" badge.
+ */
 export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
   const isListening = useHarmonizerStore((s) => s.isListening);
+  const enabled = useHarmonizerStore((s) => s.orchestraEnabled);
+  const volume = useHarmonizerStore((s) => s.orchestraVolume);
+  const activePattern = useHarmonizerStore((s) => s.orchestraPattern);
+  const setEnabled = useHarmonizerStore((s) => s.setOrchestraEnabled);
+  const setVolume = useHarmonizerStore((s) => s.setOrchestraVolume);
+  const setActivePattern = useHarmonizerStore((s) => s.setOrchestraPattern);
 
-  // Local state is mirrored from the pipeline (the audio side is the source of
-  // truth). We re-sync whenever the pipeline lifecycle changes (start/stop),
-  // so a fresh pipeline never inherits a stale "loaded" flag.
-  const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [volume, setVolume] = useState(50);
-  const [activePattern, setActivePattern] = useState<string>("cinematic");
 
   useEffect(() => {
     const p = pipeline.current;
     if (isListening && p) {
-      setEnabled(p.isOrchestraEnabled());
       setLoaded(p.isOrchestraLoaded());
-      setLoading(false);
+      setLoading(!p.isOrchestraLoaded() && enabled);
     } else {
-      setEnabled(false);
       setLoaded(false);
       setLoading(false);
     }
-  }, [isListening, pipeline]);
+  }, [isListening, pipeline, enabled]);
+
+  // Poll briefly while we expect samples to be loading, so the badge flips
+  // from "Loading..." to "ON" as soon as the pipeline reports loaded.
+  useEffect(() => {
+    if (!loading) return;
+    const p = pipeline.current;
+    if (!p) return;
+    const id = setInterval(() => {
+      if (p.isOrchestraLoaded()) {
+        setLoaded(true);
+        setLoading(false);
+      }
+    }, 200);
+    return () => clearInterval(id);
+  }, [loading, pipeline]);
 
   async function handleEnable(checked: boolean) {
+    setEnabled(checked);
     const p = pipeline.current;
     if (!p) return;
 
@@ -59,16 +87,14 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
     }
 
     setLoaded(p.isOrchestraLoaded());
-    setEnabled(checked);
     p.setOrchestraEnabled(checked);
-    // Push remembered volume/pattern into the (possibly fresh) pipeline.
-    p.setOrchestraVolume(volume / 100);
+    p.setOrchestraVolume(volume);
     p.setOrchestraPattern(activePattern);
   }
 
   function handleVolume(v: number) {
     setVolume(v);
-    pipeline.current?.setOrchestraVolume(v / 100);
+    pipeline.current?.setOrchestraVolume(v);
   }
 
   function handlePattern(key: string) {
@@ -99,16 +125,16 @@ export function OrchestraPanel({ pipeline }: OrchestraPanelProps) {
 
       {enabled && loaded && (
         <>
-          {/* Volume */}
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-[var(--text-dim)] w-8">Vol</span>
-            <input type="range" min={0} max={100} step={1} value={volume}
+            <input type="range" min={0} max={1} step={0.01} value={volume}
               onChange={(e) => handleVolume(Number(e.target.value))}
               className="flex-1" />
-            <span className="text-[9px] text-[var(--text-dim)] w-5 text-right" style={mono}>{volume}</span>
+            <span className="text-[9px] text-[var(--text-dim)] w-5 text-right" style={mono}>
+              {Math.round(volume * 100)}
+            </span>
           </div>
 
-          {/* Pattern selector */}
           <div className="flex flex-wrap gap-1">
             {PATTERNS.map(({ key, label }) => (
               <button key={key}

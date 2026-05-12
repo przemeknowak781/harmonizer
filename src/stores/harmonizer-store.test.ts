@@ -55,19 +55,28 @@ describe("harmonizer store", () => {
 
   it("default effects values", () => {
     const state = useHarmonizerStore.getState();
-    expect(state.reverbMix).toBeCloseTo(0.26);
-    expect(state.delayTime).toBe(300);
-    expect(state.delayFeedback).toBe(0.3);
-    expect(state.delayMix).toBeCloseTo(0.18);
+    expect(state.reverbMix).toBeCloseTo(0.51);
+    expect(state.delayTime).toBe(0);
+    expect(state.delayFeedback).toBe(0);
+    expect(state.delayMix).toBe(0);
   });
 
   it("default looper and transport values", () => {
     const state = useHarmonizerStore.getState();
     expect(state.looperState).toBe("empty");
-    expect(state.bpm).toBe(120);
+    expect(state.bpm).toBe(100);
     expect(state.isTransportPlaying).toBe(false);
     expect(state.currentBeat).toBe(0);
-    expect(state.activeProgression).toBeNull();
+    expect(state.activeProgression).not.toBeNull();
+    expect(state.activeProgression?.key).toBe("A");
+    expect(state.activeProgression?.slots).toHaveLength(4);
+  });
+
+  it("default orchestra is enabled with tremolo pattern", () => {
+    const state = useHarmonizerStore.getState();
+    expect(state.orchestraEnabled).toBe(true);
+    expect(state.orchestraPattern).toBe("tremolo-drama");
+    expect(state.orchestraVolume).toBeCloseTo(0.72);
   });
 
   it("setReverbMix clamps to 0–1", () => {

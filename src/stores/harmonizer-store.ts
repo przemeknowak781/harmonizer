@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { KeySignature, HarmonyPresetName } from "../types/music";
 import type { ChordProgression } from "../types/chords";
 import type { LooperState } from "../audio/looper";
+import { buildProgression } from "../engine/progressions";
 
 // Per-voice state tracked in store
 export interface VoiceState {
@@ -17,12 +18,19 @@ export interface VoiceState {
 
 function defaultVoiceStates(): VoiceState[] {
   return [
-    { active: true, volume: 0.5, pan: -0.4, octaveShift: 0, cofSteps: 1, cofOctaveReduce: false },
-    { active: true, volume: 0.5, pan: 0.4, octaveShift: 0, cofSteps: -1, cofOctaveReduce: false },
-    { active: true, volume: 0.4, pan: -0.2, octaveShift: 0, cofSteps: 2, cofOctaveReduce: true },
-    { active: true, volume: 0.35, pan: 0.2, octaveShift: 0, cofSteps: -2, cofOctaveReduce: true },
+    { active: true, volume: 0.78, pan: -0.4,  octaveShift: 0,  cofSteps: 1,  cofOctaveReduce: false },
+    { active: true, volume: 0.65, pan: 0.4,   octaveShift: 0,  cofSteps: -1, cofOctaveReduce: false },
+    { active: true, volume: 0.55, pan: -0.15, octaveShift: 1,  cofSteps: 2,  cofOctaveReduce: true  },
+    { active: true, volume: 0.70, pan: 0.15,  octaveShift: -1, cofSteps: -2, cofOctaveReduce: true  },
   ];
 }
+
+const DEFAULT_PROGRESSION: ChordProgression = buildProgression(
+  "A",
+  "natural-minor",
+  [0, 3, 4, 0], // i–iv–v–i (Am–Dm–Em–Am)
+  4,
+);
 
 interface HarmonizerState {
   key: KeySignature;
@@ -52,6 +60,10 @@ interface HarmonizerState {
   stringsVolume: number;
   stringsBrightness: number;
   stringsAttack: number;
+  /** Orchestra (sample-based string sections) */
+  orchestraEnabled: boolean;
+  orchestraVolume: number;       // 0–1
+  orchestraPattern: string;      // arrangement pattern key
   /** Smooth controls */
   smoothFadeEnabled: boolean;
   fadeTimeMs: number;          // 10–300 ms
@@ -83,6 +95,9 @@ interface HarmonizerState {
   setStringsVolume: (v: number) => void;
   setStringsBrightness: (v: number) => void;
   setStringsAttack: (v: number) => void;
+  setOrchestraEnabled: (v: boolean) => void;
+  setOrchestraVolume: (v: number) => void;
+  setOrchestraPattern: (v: string) => void;
   setVoiceVolume: (index: number, volume: number) => void;
   setVoicePan: (index: number, pan: number) => void;
   setVoiceActive: (index: number, active: boolean) => void;
@@ -106,35 +121,38 @@ const clamp = (v: number, min: number, max: number) =>
 export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   key: { root: "A", mode: "natural-minor" },
   presetName: "choir",
-  masterVolume: 0.8,
-  dryVolume: 1,
+  masterVolume: 1.0,
+  dryVolume: 0.35,
   isListening: false,
   currentPitch: null,
   currentConfidence: 0,
   harmonyMode: "chord",
   cofPresetName: "pure-fifths",
   rhythmPattern: "simultaneous",
-  reverbMix: 0.26,
-  delayTime: 300,
-  delayFeedback: 0.3,
-  delayMix: 0.18,
+  reverbMix: 0.51,
+  delayTime: 0,
+  delayFeedback: 0,
+  delayMix: 0,
   looperState: "empty",
-  bpm: 120,
+  bpm: 100,
   isTransportPlaying: false,
   currentBeat: 0,
-  activeProgression: null,
+  activeProgression: DEFAULT_PROGRESSION,
   voiceStates: defaultVoiceStates(),
-  maxTransposeRatio: 2, // 1 octave up
-  minTransposeRatio: 0.125, // effectively unlimited down
+  maxTransposeRatio: 2,     // +1 octave (Hi slider at +1)
+  minTransposeRatio: 0.25,  // -2 octaves (Lo slider at -2)
   stringsEnabled: false,
   stringsVolume: 0.4,
   stringsBrightness: 0.5,
   stringsAttack: 0.2,
+  orchestraEnabled: true,
+  orchestraVolume: 0.72,
+  orchestraPattern: "tremolo-drama",
   smoothFadeEnabled: true,
-  fadeTimeMs: 100,
+  fadeTimeMs: 160,
   portamentoEnabled: true,
   portamentoTimeMs: 60,
-  jitterGateCents: 5,
+  jitterGateCents: 27,
 
   setKey: (key) => set({ key }),
   setPreset: (presetName) => set({ presetName }),
@@ -184,6 +202,9 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   setStringsVolume: (stringsVolume) => set({ stringsVolume: clamp(stringsVolume, 0, 1) }),
   setStringsBrightness: (stringsBrightness) => set({ stringsBrightness: clamp(stringsBrightness, 0, 1) }),
   setStringsAttack: (stringsAttack) => set({ stringsAttack: clamp(stringsAttack, 0.01, 1) }),
+  setOrchestraEnabled: (orchestraEnabled) => set({ orchestraEnabled }),
+  setOrchestraVolume: (orchestraVolume) => set({ orchestraVolume: clamp(orchestraVolume, 0, 1) }),
+  setOrchestraPattern: (orchestraPattern) => set({ orchestraPattern }),
   setMaxTransposeRatio: (maxTransposeRatio) =>
     set({ maxTransposeRatio: clamp(maxTransposeRatio, 1, 8) }),
   setMinTransposeRatio: (minTransposeRatio) =>
