@@ -72,10 +72,10 @@ describe("harmonizer store", () => {
     expect(state.activeProgression?.slots).toHaveLength(4);
   });
 
-  it("default orchestra is enabled with tremolo pattern", () => {
+  it("default orchestra is enabled with chorale (sustained) pattern", () => {
     const state = useHarmonizerStore.getState();
     expect(state.orchestraEnabled).toBe(true);
-    expect(state.orchestraPattern).toBe("tremolo-drama");
+    expect(state.orchestraPattern).toBe("sustained");
     expect(state.orchestraVolume).toBeCloseTo(0.72);
   });
 
