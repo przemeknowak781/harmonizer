@@ -616,29 +616,36 @@ export async function createAudioPipeline(
       if (data.confidence > 0.8 && data.frequency > 0) {
         applyHarmony(data.frequency);
 
-        // Feed string ensemble with harmony frequencies
-        if (stringEnsemble.isEnabled()) {
-          const freqs: (number | null)[] = [data.frequency]; // root = singer
+        // In autotune mode the first active voice IS the snapped lead, so the
+        // orchestra/strings root must be the *snapped* frequency, not the raw
+        // mic pitch — otherwise sections play sharp/flat with the singer.
+        let leadIdx = -1;
+        if (harmonyMode === "autotune") {
           for (let i = 0; i < MAX_VOICES; i++) {
-            const r = voiceCurrentRatios[i];
-            const cv = customCofVoices[i];
-            if (r && cv?.active && Math.abs(r - 1) > 0.001) {
-              freqs.push(data.frequency * r);
+            if (customCofVoices[i]?.active && voiceCurrentRatios[i]) {
+              leadIdx = i;
+              break;
             }
           }
-          stringEnsemble.update(freqs);
         }
-        // Feed orchestra with root + ratios
+        const leadRatio = leadIdx >= 0 ? voiceCurrentRatios[leadIdx]! : 1;
+        const rootFreq = data.frequency * leadRatio;
+
+        const harmonyRatios: number[] = [];
+        for (let i = 0; i < MAX_VOICES; i++) {
+          if (i === leadIdx) continue;
+          const r = voiceCurrentRatios[i];
+          const cv = customCofVoices[i];
+          if (!r || !cv?.active) continue;
+          const relRatio = r / leadRatio;
+          if (Math.abs(relRatio - 1) > 0.001) harmonyRatios.push(relRatio);
+        }
+
+        if (stringEnsemble.isEnabled()) {
+          stringEnsemble.update([rootFreq, ...harmonyRatios.map((r) => rootFreq * r)]);
+        }
         if (orchestra.isEnabled() && orchestra.isLoaded()) {
-          const activeRatios: number[] = [];
-          for (let i = 0; i < MAX_VOICES; i++) {
-            const r = voiceCurrentRatios[i];
-            const cv = customCofVoices[i];
-            if (r && cv?.active && Math.abs(r - 1) > 0.001) {
-              activeRatios.push(r);
-            }
-          }
-          orchestra.update(data.frequency, activeRatios);
+          orchestra.update(rootFreq, harmonyRatios);
         }
       } else {
         // No pitch — silence strings and orchestra
