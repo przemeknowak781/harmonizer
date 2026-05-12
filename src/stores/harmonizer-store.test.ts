@@ -55,7 +55,7 @@ describe("harmonizer store", () => {
 
   it("default effects values", () => {
     const state = useHarmonizerStore.getState();
-    expect(state.reverbMix).toBeCloseTo(0.51);
+    expect(state.reverbMix).toBeCloseTo(0.69);
     expect(state.delayTime).toBe(0);
     expect(state.delayFeedback).toBe(0);
     expect(state.delayMix).toBe(0);
