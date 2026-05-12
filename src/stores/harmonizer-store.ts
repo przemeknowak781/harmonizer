@@ -147,7 +147,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   stringsAttack: 0.2,
   orchestraEnabled: true,
   orchestraVolume: 0.72,
-  orchestraPattern: "tremolo-drama",
+  orchestraPattern: "sustained",
   smoothFadeEnabled: true,
   fadeTimeMs: 160,
   portamentoEnabled: true,
