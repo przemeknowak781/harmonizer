@@ -167,11 +167,32 @@ export function MobileLayout() {
       </header>
 
       {/* ══ HERO: pitch display ══ */}
-      <div className="shrink-0 flex flex-col items-center justify-center pt-3 pb-2 px-4">
+      <div className="shrink-0 flex flex-col items-center justify-center pt-3 pb-2 px-4 relative">
         <PitchDisplay frequency={currentPitch} confidence={currentConfidence} />
         <div className="w-full max-w-md mt-2">
           <Waveform analyser={analyser} />
         </div>
+
+        {/* Big, prominent MIC CTA shown when mic is off — the primary entry
+            point on mobile too. Sized down a touch from desktop so it fits
+            inside the hero pane without overlapping the dial controls. */}
+        {!isListening && (
+          <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px] bg-[var(--bg)]/40 z-10">
+            <button
+              onClick={start}
+              aria-label="Start microphone"
+              className="flex flex-col items-center gap-2 px-9 py-6 rounded-3xl bg-[var(--green)] text-black font-bold shadow-[0_0_30px_var(--green-glow)] active:scale-95 transition-transform animate-pulse"
+            >
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="9" y="2" width="6" height="13" rx="3" />
+                <path d="M5 11 a7 7 0 0 0 14 0" />
+                <path d="M12 18 v3" />
+                <path d="M8 21 h8" />
+              </svg>
+              <span className="text-sm tracking-wider">TAP TO START</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ══ TAB CONTENT ══
