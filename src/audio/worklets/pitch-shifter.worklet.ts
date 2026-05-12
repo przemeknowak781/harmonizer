@@ -36,14 +36,12 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
 
     const ratio = this.ratio;
 
-    if (Math.abs(ratio - 1) < 0.001) {
-      // No shift — passthrough
-      output.set(input);
-      this.readPos += input.length;
-      return true;
-    }
-
-    // Read from circular buffer with ratio-adjusted speed
+    // Always resample (no ratio=1 bypass). The bypass branch wrote `output =
+    // input` with zero buffer-read latency, while the resample branch reads
+    // from `readPos` lagging `writePos`. Switching between the two mid-glide
+    // (when legato sweeps through unison) produced a phase discontinuity =
+    // click on one channel. Resampling at ratio≈1 is numerically the same
+    // as the bypass, just with a small consistent latency.
     for (let i = 0; i < output.length; i++) {
       const readIndex = this.readPos + i * ratio;
       const intPart = Math.floor(readIndex) % BUFFER_LENGTH;

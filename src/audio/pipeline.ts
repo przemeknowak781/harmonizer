@@ -322,14 +322,23 @@ export async function createAudioPipeline(
   // Used as dt in the first-order low-pass below.
   const SMOOTH_TICK_MS = 23;
 
-  /** Set gain — direct assignment. */
+  /**
+   * Ramp gain to target using AudioParam smoothing.
+   *
+   * Direct `.value = x` writes cause sample-accurate steps every pitch
+   * callback (~23 ms). Combined with formant rolloff modulating as the
+   * legato ratio glides, those steps become audible clicks. `setTargetAtTime`
+   * gives an exponential approach with a 5 ms time constant — well under
+   * the callback period so the value still tracks updates, but no longer
+   * jumps as a square wave.
+   */
   function smoothGain(gainNode: GainNode, target: number): void {
-    gainNode.gain.value = target;
+    gainNode.gain.setTargetAtTime(target, context.currentTime, 0.005);
   }
 
-  /** Set pan — direct assignment. */
+  /** Ramp pan to target with a short time constant — same rationale as gain. */
   function smoothPan(pannerNode: StereoPannerNode, target: number): void {
-    pannerNode.pan.value = target;
+    pannerNode.pan.setTargetAtTime(target, context.currentTime, 0.005);
   }
 
   /**
@@ -682,18 +691,18 @@ export async function createAudioPipeline(
       currentPreset = preset;
     },
     setDryVolume: (v) => {
-      dryGain.gain.value = v;
+      dryGain.gain.setTargetAtTime(v, context.currentTime, 0.01);
     },
     setMasterVolume: (v) => {
-      masterGain.gain.value = v;
+      masterGain.gain.setTargetAtTime(v, context.currentTime, 0.01);
     },
     setVoiceVolume: (index, v) => {
       const gain = voiceGains[index];
-      if (gain) gain.gain.value = v;
+      if (gain) gain.gain.setTargetAtTime(v, context.currentTime, 0.01);
     },
     setVoicePan: (index, pan) => {
       const panner = voicePanners[index];
-      if (panner) panner.pan.value = pan;
+      if (panner) panner.pan.setTargetAtTime(pan, context.currentTime, 0.01);
     },
     getAnalyserNode: () => analyser,
     destroy: () => {
