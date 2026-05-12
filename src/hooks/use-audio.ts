@@ -30,6 +30,9 @@ export function useAudio() {
     stringsVolume,
     stringsBrightness,
     stringsAttack,
+    orchestraEnabled,
+    orchestraVolume,
+    orchestraPattern,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
@@ -94,6 +97,20 @@ export function useAudio() {
       pipelineRef.current = pipeline;
       setIsReady(true);
       setListening(true);
+
+      // Auto-load orchestra in the background if the store says it should
+      // be enabled (e.g. on first launch the default is on with Tremolo at
+      // 0.72 vol). The mic is already live by the time samples arrive, so
+      // there's no perceived start latency.
+      if (orchestraEnabled) {
+        pipeline.loadOrchestra()
+          .then(() => {
+            pipeline.setOrchestraVolume(orchestraVolume);
+            pipeline.setOrchestraPattern(orchestraPattern);
+            pipeline.setOrchestraEnabled(true);
+          })
+          .catch((e) => console.warn("Orchestra autoload failed:", e));
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to access microphone",
@@ -118,6 +135,9 @@ export function useAudio() {
     stringsVolume,
     stringsBrightness,
     stringsAttack,
+    orchestraEnabled,
+    orchestraVolume,
+    orchestraPattern,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
@@ -191,6 +211,9 @@ export function useAudio() {
     stringsVolume,
     stringsBrightness,
     stringsAttack,
+    orchestraEnabled,
+    orchestraVolume,
+    orchestraPattern,
     smoothFadeEnabled,
     fadeTimeMs,
     portamentoEnabled,
