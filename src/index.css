@@ -167,6 +167,108 @@ select:focus {
   border: 1px solid transparent;
   white-space: nowrap;
 }
+
+/* ══ Touch device adjustments: larger hit targets ══ */
+@media (pointer: coarse) {
+  input[type="range"] {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 22px; height: 22px;
+    box-shadow: 0 0 10px var(--amber-glow-strong), 0 0 2px var(--amber);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 6px; border-radius: 3px;
+  }
+  input[type="checkbox"] {
+    width: 40px; height: 22px;
+    border-radius: 11px;
+  }
+  input[type="checkbox"]::after {
+    width: 16px; height: 16px;
+    top: 3px; left: 3px;
+  }
+  input[type="checkbox"]:checked::after {
+    transform: translateX(18px);
+  }
+  select {
+    font-size: 14px;
+    padding: 8px 12px;
+    min-height: 38px;
+  }
+  button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .pill {
+    padding: 8px 14px;
+    font-size: 13px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ══ Mobile-specific helpers ══ */
+.mobile-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px;
+}
+.mobile-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.mobile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+}
+.mobile-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  min-height: 56px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-tab-btn[data-active="true"] {
+  color: var(--amber);
+}
+.mobile-tab-btn[data-active="true"] svg {
+  filter: drop-shadow(0 0 6px var(--amber-glow-strong));
+}
+.mobile-tab-btn:active {
+  background: var(--surface-raised);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
 .pill-inactive {
   background: var(--surface-raised);
   color: var(--text-mid);
