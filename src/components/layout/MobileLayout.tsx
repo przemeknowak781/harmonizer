@@ -162,174 +162,166 @@ export function MobileLayout() {
         </div>
       </div>
 
-      {/* ══ TAB CONTENT ══ */}
+      {/* ══ TAB CONTENT ══
+          All panels stay mounted across tab switches so React state (slider
+          positions, orchestra toggle, etc.) is preserved. Inactive tabs use
+          `hidden` which collapses them to display:none without unmounting. */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2">
-        {activeTab === "voices" && (
-          <div className="flex flex-col gap-3 animate-fade-in">
-            <span className="mobile-section-title">Harmony Voices</span>
-            <VoiceEditor pipeline={pipeline} />
+
+        <div hidden={activeTab !== "voices"} className="flex flex-col gap-3">
+          <span className="mobile-section-title">Harmony Voices</span>
+          <VoiceEditor pipeline={pipeline} />
+        </div>
+
+        <div hidden={activeTab !== "harmony"} className="flex flex-col gap-4">
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Mode</span>
+            <select
+              value={harmonyMode}
+              onChange={(e) =>
+                setHarmonyMode(e.target.value as "interval" | "chord" | "fifths" | "geometric")
+              }
+              className="w-full text-sm"
+            >
+              <option value="interval">Interval (scale-based)</option>
+              <option value="chord">Chord progression</option>
+              <option value="fifths">Circle of 5ths</option>
+              <option value="geometric">Geometric JI</option>
+              <option value="adaptive">Adaptive (auto)</option>
+            </select>
           </div>
-        )}
 
-        {activeTab === "harmony" && (
-          <div className="flex flex-col gap-4 animate-fade-in">
+          {harmonyMode !== "fifths" && harmonyMode !== "geometric" && harmonyMode !== "adaptive" && (
             <div className="mobile-card flex flex-col gap-3">
-              <span className="mobile-section-title">Mode</span>
-              <select
-                value={harmonyMode}
-                onChange={(e) =>
-                  setHarmonyMode(e.target.value as "interval" | "chord" | "fifths" | "geometric")
-                }
-                className="w-full text-sm"
-              >
-                <option value="interval">Interval (scale-based)</option>
-                <option value="chord">Chord progression</option>
-                <option value="fifths">Circle of 5ths</option>
-                <option value="geometric">Geometric JI</option>
-                <option value="adaptive">Adaptive (auto)</option>
-              </select>
+              <span className="mobile-section-title">Key & Scale</span>
+              <KeySelector
+                root={key.root}
+                mode={key.mode}
+                onRootChange={(root) => setKey({ ...key, root })}
+                onModeChange={(mode) => setKey({ ...key, mode })}
+              />
             </div>
+          )}
 
-            {harmonyMode !== "fifths" && harmonyMode !== "geometric" && harmonyMode !== "adaptive" && (
-              <div className="mobile-card flex flex-col gap-3">
-                <span className="mobile-section-title">Key & Scale</span>
-                <KeySelector
-                  root={key.root}
-                  mode={key.mode}
-                  onRootChange={(root) => setKey({ ...key, root })}
-                  onModeChange={(mode) => setKey({ ...key, mode })}
-                />
-              </div>
-            )}
-
-            {harmonyMode === "adaptive" && (
-              <div className="mobile-card">
-                <p className="text-xs text-[var(--text-mid)] italic leading-relaxed">
-                  Adaptive mode — harmony follows your melody automatically. Just sing.
-                </p>
-              </div>
-            )}
-
-            {harmonyMode === "fifths" && (
-              <div className="mobile-card flex flex-col gap-3">
-                <span className="mobile-section-title">CoF Preset</span>
-                <CofPresetSelector />
-              </div>
-            )}
-
-            {harmonyMode !== "fifths" && harmonyMode !== "geometric" && harmonyMode !== "adaptive" && (
-              <>
-                <div className="mobile-card flex flex-col gap-3">
-                  <span className="mobile-section-title">Preset</span>
-                  <PresetSelector value={presetName} onChange={setPreset} />
-                </div>
-                <div className="mobile-card flex flex-col gap-3">
-                  <span className="mobile-section-title">Rhythm</span>
-                  <RhythmSelector />
-                </div>
-              </>
-            )}
-
-            {(harmonyMode === "chord" || harmonyMode === "geometric") && (
-              <>
-                <div className="mobile-card flex flex-col gap-3">
-                  <span className="mobile-section-title">Chord Progression</span>
-                  <ChordProgressionEditor />
-                </div>
-                <div className="mobile-card flex flex-col gap-3">
-                  <span className="mobile-section-title">Transport</span>
-                  <TransportBar pipeline={pipeline} />
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {activeTab === "fx" && (
-          <div className="flex flex-col gap-3 animate-fade-in">
-            <div className="mobile-card flex flex-col gap-3">
-              <span className="mobile-section-title">Effects</span>
-              <EffectsPanel pipeline={pipeline} />
-            </div>
-            <div className="mobile-card flex flex-col gap-3">
-              <span className="mobile-section-title">Smoothing</span>
-              <SmoothingPanel pipeline={pipeline} />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "sound" && (
-          <div className="flex flex-col gap-3 animate-fade-in">
-            <div className="mobile-card flex flex-col gap-3">
-              <OrchestraPanel pipeline={pipeline} />
-            </div>
-            <div className="mobile-card flex flex-col gap-3">
-              <StringsPanel pipeline={pipeline} />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "loop" && (
-          <div className="flex flex-col gap-3 animate-fade-in">
-            <div className="mobile-card flex flex-col gap-3">
-              <span className="mobile-section-title">Looper</span>
-              <LooperControls pipeline={pipeline} />
-              <p className="text-[10px] text-[var(--text-dim)] leading-relaxed mt-1">
-                Record your dry voice, then play it back with harmonies generated live. Overdub layers more parts.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "more" && (
-          <div className="flex flex-col gap-3 animate-fade-in">
-            <div className="mobile-card flex flex-col gap-3">
-              <span className="mobile-section-title">Transpose Range</span>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-mid)]">Low limit</span>
-                  <span className="text-xs text-[var(--amber)]" style={mono}>
-                    {minTransposeRatio >= 0.5 ? "−1 oct" : minTransposeRatio >= 0.25 ? "−2 oct" : "−3 oct"}
-                  </span>
-                </div>
-                <input
-                  type="range" min={0.125} max={1} step={0.125} value={minTransposeRatio}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setMinTransposeRatio(v);
-                    pipeline.current?.setMinTransposeRatio(v);
-                  }}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-mid)]">High limit</span>
-                  <span className="text-xs text-[var(--amber)]" style={mono}>
-                    {maxTransposeRatio <= 2 ? "+1 oct" : maxTransposeRatio <= 4 ? "+2 oct" : "+3 oct"}
-                  </span>
-                </div>
-                <input
-                  type="range" min={1} max={8} step={0.5} value={maxTransposeRatio}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setMaxTransposeRatio(v);
-                    pipeline.current?.setMaxTransposeRatio(v);
-                  }}
-                  className="w-full"
-                />
-              </div>
-            </div>
-
+          {harmonyMode === "adaptive" && (
             <div className="mobile-card">
-              <p className="text-[11px] text-[var(--text-dim)] leading-relaxed">
-                <strong className="text-[var(--text-mid)]">Tip:</strong> 100% client-side. Your voice never leaves the device.
+              <p className="text-xs text-[var(--text-mid)] italic leading-relaxed">
+                Adaptive mode — harmony follows your melody automatically. Just sing.
               </p>
             </div>
+          )}
+
+          {harmonyMode === "fifths" && (
+            <div className="mobile-card flex flex-col gap-3">
+              <span className="mobile-section-title">CoF Preset</span>
+              <CofPresetSelector />
+            </div>
+          )}
+
+          {harmonyMode !== "fifths" && harmonyMode !== "geometric" && harmonyMode !== "adaptive" && (
+            <>
+              <div className="mobile-card flex flex-col gap-3">
+                <span className="mobile-section-title">Preset</span>
+                <PresetSelector value={presetName} onChange={setPreset} />
+              </div>
+              <div className="mobile-card flex flex-col gap-3">
+                <span className="mobile-section-title">Rhythm</span>
+                <RhythmSelector />
+              </div>
+            </>
+          )}
+
+          {(harmonyMode === "chord" || harmonyMode === "geometric") && (
+            <>
+              <div className="mobile-card flex flex-col gap-3">
+                <span className="mobile-section-title">Chord Progression</span>
+                <ChordProgressionEditor />
+              </div>
+              <div className="mobile-card flex flex-col gap-3">
+                <span className="mobile-section-title">Transport</span>
+                <TransportBar pipeline={pipeline} />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div hidden={activeTab !== "fx"} className="flex flex-col gap-3">
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Effects</span>
+            <EffectsPanel pipeline={pipeline} />
           </div>
-        )}
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Smoothing</span>
+            <SmoothingPanel pipeline={pipeline} />
+          </div>
+        </div>
+
+        <div hidden={activeTab !== "sound"} className="flex flex-col gap-3">
+          <div className="mobile-card flex flex-col gap-3">
+            <OrchestraPanel pipeline={pipeline} />
+          </div>
+          <div className="mobile-card flex flex-col gap-3">
+            <StringsPanel pipeline={pipeline} />
+          </div>
+        </div>
+
+        <div hidden={activeTab !== "loop"} className="flex flex-col gap-3">
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Looper</span>
+            <LooperControls pipeline={pipeline} />
+            <p className="text-[10px] text-[var(--text-dim)] leading-relaxed mt-1">
+              Record your dry voice, then play it back with harmonies generated live. Overdub layers more parts.
+            </p>
+          </div>
+        </div>
+
+        <div hidden={activeTab !== "more"} className="flex flex-col gap-3">
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Transpose Range</span>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--text-mid)]">Low limit</span>
+                <span className="text-xs text-[var(--amber)]" style={mono}>
+                  {minTransposeRatio >= 0.5 ? "−1 oct" : minTransposeRatio >= 0.25 ? "−2 oct" : "−3 oct"}
+                </span>
+              </div>
+              <input
+                type="range" min={0.125} max={1} step={0.125} value={minTransposeRatio}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setMinTransposeRatio(v);
+                  pipeline.current?.setMinTransposeRatio(v);
+                }}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--text-mid)]">High limit</span>
+                <span className="text-xs text-[var(--amber)]" style={mono}>
+                  {maxTransposeRatio <= 2 ? "+1 oct" : maxTransposeRatio <= 4 ? "+2 oct" : "+3 oct"}
+                </span>
+              </div>
+              <input
+                type="range" min={1} max={8} step={0.5} value={maxTransposeRatio}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setMaxTransposeRatio(v);
+                  pipeline.current?.setMaxTransposeRatio(v);
+                }}
+                className="w-full"
+              />
+            </div>
+          </div>
+
+          <div className="mobile-card">
+            <p className="text-[11px] text-[var(--text-dim)] leading-relaxed">
+              <strong className="text-[var(--text-mid)]">Tip:</strong> 100% client-side. Your voice never leaves the device.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* ══ BOTTOM TAB BAR ══ */}
