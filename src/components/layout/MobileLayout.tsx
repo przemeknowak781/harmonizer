@@ -15,6 +15,7 @@ import { CofPresetSelector } from "../ui/CofPresetSelector";
 import { SmoothingPanel } from "../ui/SmoothingPanel";
 import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
+import { StylePicker } from "../ui/StylePicker";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -174,6 +175,11 @@ export function MobileLayout() {
         </div>
 
         <div hidden={activeTab !== "harmony"} className="flex flex-col gap-4">
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Style</span>
+            <StylePicker onApply={syncSettings} />
+          </div>
+
           <div className="mobile-card flex flex-col gap-3">
             <span className="mobile-section-title">Mode</span>
             <select

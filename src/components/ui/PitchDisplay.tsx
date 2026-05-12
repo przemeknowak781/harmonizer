@@ -1,4 +1,5 @@
-import { frequencyToPitchInfo } from "../../engine/pitch";
+import { useRef } from "react";
+import { frequencyToMidi, midiToNoteName, midiToOctave } from "../../engine/pitch";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -12,9 +13,69 @@ interface PitchDisplayProps {
  * Rotary dial pitch display.
  * Uses stroke-dasharray on a circle for the arc — no SVG path math bugs.
  * Needle + arc glow: green (in tune) → amber → red (off).
+ *
+ * The raw pitch detector jitters by several cents per frame and crosses
+ * semitone boundaries during slides — feeding that straight into the
+ * needle made it whip between +50 ¢ and −50 ¢ on every other frame. We
+ * therefore:
+ *   1) Run an EMA on log-frequency for sub-semitone variations (steady
+ *      vibrato/jitter is smoothed; a slide of > 0.5 semitone in one tick
+ *      snaps so the needle catches up instantly to deliberate notes).
+ *   2) Apply hysteresis on the displayed note name: the locked note only
+ *      changes when the smoothed pitch is more than 0.55 semitones away
+ *      from it, so vibrato around a semitone boundary doesn't flicker
+ *      the note name + flip the needle from +50 to −50.
+ *   3) Clamp the displayed cents to ±50 so the needle stays in the dial.
  */
+const SMOOTH_ALPHA = 0.25;
+const SNAP_SEMITONES = 0.5;      // raw→smoothed step that triggers an EMA reset
+const LOCK_HYSTERESIS = 0.55;    // smoothed→displayed-note switch threshold
+
 export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
-  const isActive = frequency && frequency > 0 && confidence >= 0.5;
+  const isActive = !!(frequency && frequency > 0 && confidence >= 0.5);
+
+  const smoothedFreqRef = useRef<number | null>(null);
+  const lockedMidiRef = useRef<number | null>(null);
+
+  if (!isActive || !frequency) {
+    smoothedFreqRef.current = null;
+    lockedMidiRef.current = null;
+  } else {
+    const prev = smoothedFreqRef.current;
+    if (prev === null || prev <= 0) {
+      smoothedFreqRef.current = frequency;
+    } else {
+      const semitoneDiff = Math.abs(12 * Math.log2(frequency / prev));
+      if (semitoneDiff > SNAP_SEMITONES) {
+        smoothedFreqRef.current = frequency;
+      } else {
+        const logPrev = Math.log2(prev);
+        const logNew = Math.log2(frequency);
+        smoothedFreqRef.current = Math.pow(2, logPrev + (logNew - logPrev) * SMOOTH_ALPHA);
+      }
+    }
+  }
+
+  const smoothedFreq = smoothedFreqRef.current;
+  let info: { noteName: string; octave: number; centsOffset: number } | null = null;
+  if (isActive && smoothedFreq) {
+    const rawMidi = frequencyToMidi(smoothedFreq);
+    const locked = lockedMidiRef.current;
+    let displayMidi: number;
+    if (locked === null || Math.abs(rawMidi - locked) > LOCK_HYSTERESIS) {
+      displayMidi = Math.round(rawMidi);
+      lockedMidiRef.current = displayMidi;
+    } else {
+      displayMidi = locked;
+    }
+    const rawCents = Math.round((rawMidi - displayMidi) * 100);
+    info = {
+      noteName: midiToNoteName(displayMidi),
+      octave: midiToOctave(displayMidi),
+      centsOffset: Math.max(-50, Math.min(50, rawCents)),
+    };
+  }
+
 
   const SIZE = 180;
   const CX = SIZE / 2;
@@ -26,8 +87,7 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
   const GAP_LENGTH = CIRCUMFERENCE - ARC_LENGTH;
   const ROTATION = 150;                         // rotate so gap is at bottom
 
-  const cents = isActive ? frequencyToPitchInfo(frequency).centsOffset : 0;
-  const info = isActive ? frequencyToPitchInfo(frequency) : null;
+  const cents = info?.centsOffset ?? 0;
 
   // Needle: 0¢ = top (12 o'clock), -50¢ = left edge, +50¢ = right edge
   // Arc goes from -120° to +120° (240° span), with 0° = top
@@ -189,9 +249,9 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
           >
             {info ? `${info.noteName}${info.octave}` : "—"}
           </span>
-          {isActive && info && (
+          {isActive && info && smoothedFreq && (
             <span className="text-[10px] mt-0.5" style={{ ...mono, color: "var(--text-mid)" }}>
-              {frequency.toFixed(1)} Hz
+              {smoothedFreq.toFixed(1)} Hz
             </span>
           )}
         </div>
