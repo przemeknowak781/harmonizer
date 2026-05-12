@@ -1,8 +1,20 @@
-import { useRef } from "react";
-import { frequencyToMidi, midiToNoteName, midiToOctave } from "../../engine/pitch";
+import { useEffect, useRef, useState } from "react";
+import { frequencyToMidi, midiToFrequency, midiToNoteName, midiToOctave } from "../../engine/pitch";
+import { NOTE_NAMES } from "../../engine/constants";
+import { useHarmonizerStore } from "../../stores/harmonizer-store";
+import type { NoteName } from "../../types/music";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
+
+const REFERENCE_OCTAVE = 4;
+
+/** Note name + octave → frequency. MIDI = (octave + 1) * 12 + noteIndex. */
+function noteToFrequency(noteName: NoteName, octave: number): number {
+  const idx = NOTE_NAMES.indexOf(noteName);
+  if (idx < 0) return 440;
+  return midiToFrequency((octave + 1) * 12 + idx);
+}
 
 interface PitchDisplayProps {
   frequency: number | null;
@@ -36,6 +48,54 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
 
   const smoothedFreqRef = useRef<number | null>(null);
   const lockedMidiRef = useRef<number | null>(null);
+
+  // Tuning fork ("kamerton"): plays the root of the first chord in the active
+  // progression at octave 4 (Am → A4 / 440 Hz, Cm → C4 / 261.6 Hz, …). Uses a
+  // lazy AudioContext so it works even before the mic pipeline has started —
+  // we don't want to require START just to hear a reference tone.
+  const activeProgression = useHarmonizerStore((s) => s.activeProgression);
+  const refNote: NoteName = activeProgression?.slots[0]?.chord.root ?? "A";
+  const refFreq = noteToFrequency(refNote, REFERENCE_OCTAVE);
+
+  const [isRinging, setIsRinging] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+      audioCtxRef.current?.close().catch(() => {});
+    };
+  }, []);
+
+  function playReference() {
+    let ctx = audioCtxRef.current;
+    if (!ctx) {
+      ctx = new AudioContext();
+      audioCtxRef.current = ctx;
+    }
+    if (ctx.state === "suspended") void ctx.resume();
+
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = refFreq;
+
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.35, now + 0.02); // 20 ms attack
+    gain.gain.linearRampToValueAtTime(0.35, now + 1.0);  // sustain ~1 s
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.55);
+
+    setIsRinging(true);
+    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+    ringTimeoutRef.current = setTimeout(() => setIsRinging(false), 1500);
+  }
 
   if (!isActive || !frequency) {
     smoothedFreqRef.current = null;
@@ -254,6 +314,28 @@ export function PitchDisplay({ frequency, confidence }: PitchDisplayProps) {
               {smoothedFreq.toFixed(1)} Hz
             </span>
           )}
+
+          {/* Tuning fork — taps to ring the root of the current first chord */}
+          <button
+            type="button"
+            onClick={playReference}
+            title={`Play reference tone — ${refNote}${REFERENCE_OCTAVE} (${refFreq.toFixed(1)} Hz)`}
+            aria-label={`Play reference tone ${refNote}${REFERENCE_OCTAVE}`}
+            className={`mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-full border transition-all ${
+              isRinging
+                ? "bg-[var(--amber)] border-[var(--amber)] text-black shadow-[0_0_18px_var(--amber-glow-strong)] scale-110"
+                : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-mid)] hover:text-[var(--amber)] hover:border-[var(--amber)] hover:shadow-[0_0_8px_var(--amber-glow)]"
+            }`}
+            style={{ minWidth: 44 }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M8 3 v9 a4 4 0 0 0 8 0 v-9" />
+              <path d="M12 16 v5" />
+            </svg>
+            <span className="text-[9px] font-bold" style={mono}>
+              {refNote}{REFERENCE_OCTAVE}
+            </span>
+          </button>
         </div>
       </div>
 
