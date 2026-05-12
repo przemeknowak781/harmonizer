@@ -129,7 +129,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   harmonyMode: "chord",
   cofPresetName: "pure-fifths",
   rhythmPattern: "simultaneous",
-  reverbMix: 0.51,
+  reverbMix: 0.69,
   delayTime: 0,
   delayFeedback: 0,
   delayMix: 0,
@@ -142,7 +142,7 @@ export const useHarmonizerStore = create<HarmonizerState>()((set) => ({
   maxTransposeRatio: 2,     // +1 octave (Hi slider at +1)
   minTransposeRatio: 0.25,  // -2 octaves (Lo slider at -2)
   stringsEnabled: false,
-  stringsVolume: 0.4,
+  stringsVolume: 0.13,
   stringsBrightness: 0.5,
   stringsAttack: 0.2,
   orchestraEnabled: true,
