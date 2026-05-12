@@ -37,6 +37,7 @@ export function useAudio() {
     jitterGateCents,
     setPitch,
     setListening,
+    setTransportPlaying,
   } = useHarmonizerStore();
 
   const start = useCallback(async () => {
@@ -45,6 +46,9 @@ export function useAudio() {
       const pipeline = await createAudioPipeline(
         (frequency, confidence) => {
           setPitch(frequency > 0 ? frequency : null, confidence);
+        },
+        (playing) => {
+          setTransportPlaying(playing);
         },
       );
 
@@ -121,6 +125,7 @@ export function useAudio() {
     jitterGateCents,
     setPitch,
     setListening,
+    setTransportPlaying,
   ]);
 
   const stop = useCallback(() => {
