@@ -16,6 +16,7 @@ import { SmoothingPanel } from "../ui/SmoothingPanel";
 import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
 import { StylePicker } from "../ui/StylePicker";
+import { PresetIO } from "../ui/PresetIO";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -108,6 +109,12 @@ export function MainLayout() {
               <span className="text-[8px] uppercase tracking-widest text-[var(--text-dim)] w-12 shrink-0">Style</span>
               <div className="flex-1 min-w-0">
                 <StylePicker onApply={syncSettings} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] uppercase tracking-widest text-[var(--text-dim)] w-12 shrink-0">Preset</span>
+              <div className="flex-1 min-w-0">
+                <PresetIO onApply={syncSettings} />
               </div>
             </div>
             {harmonyMode === "adaptive" ? (
