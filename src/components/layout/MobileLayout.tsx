@@ -16,6 +16,7 @@ import { SmoothingPanel } from "../ui/SmoothingPanel";
 import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
 import { StylePicker } from "../ui/StylePicker";
+import { PresetIO } from "../ui/PresetIO";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -178,6 +179,14 @@ export function MobileLayout() {
           <div className="mobile-card flex flex-col gap-3">
             <span className="mobile-section-title">Style</span>
             <StylePicker onApply={syncSettings} />
+          </div>
+
+          <div className="mobile-card flex flex-col gap-3">
+            <span className="mobile-section-title">Preset Slot</span>
+            <PresetIO onApply={syncSettings} />
+            <p className="text-[10px] text-[var(--text-dim)] leading-relaxed">
+              Save your tweaked sliders to a file or load a previously saved one.
+            </p>
           </div>
 
           <div className="mobile-card flex flex-col gap-3">
