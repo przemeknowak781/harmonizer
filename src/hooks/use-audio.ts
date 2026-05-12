@@ -8,6 +8,10 @@ import { PRESETS } from "../engine/presets";
 
 export function useAudio() {
   const pipelineRef = useRef<AudioPipeline | null>(null);
+  // Guards against double-start when the big MIC button is clicked and the
+  // auto-start `pointerdown` capture-listener fires on the same gesture —
+  // without this, two pipelines would be created and the first would leak.
+  const startingRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +48,8 @@ export function useAudio() {
   } = useHarmonizerStore();
 
   const start = useCallback(async () => {
+    if (startingRef.current || pipelineRef.current) return;
+    startingRef.current = true;
     try {
       setError(null);
       const pipeline = await createAudioPipeline(
@@ -115,6 +121,8 @@ export function useAudio() {
       setError(
         err instanceof Error ? err.message : "Failed to access microphone",
       );
+    } finally {
+      startingRef.current = false;
     }
   }, [
     key,

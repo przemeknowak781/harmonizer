@@ -114,11 +114,32 @@ export function MainLayout() {
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
 
           {/* Pitch + Waveform — hero area */}
-          <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
+          <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0 relative">
             <PitchDisplay frequency={currentPitch} confidence={currentConfidence} />
             <div className="w-full max-w-xl mt-2">
               <Waveform analyser={analyser} />
             </div>
+
+            {/* Big, prominent MIC CTA shown when mic is off — the primary
+                entry point. Auto-start on first interaction still works for
+                power users who go straight for a slider/style chip. */}
+            {!isListening && (
+              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px] bg-[var(--bg)]/40 z-10">
+                <button
+                  onClick={start}
+                  aria-label="Start microphone"
+                  className="flex flex-col items-center gap-3 px-12 py-8 rounded-3xl bg-[var(--green)] text-black font-bold shadow-[0_0_40px_var(--green-glow)] hover:scale-105 active:scale-95 transition-transform animate-pulse"
+                >
+                  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <rect x="9" y="2" width="6" height="13" rx="3" />
+                    <path d="M5 11 a7 7 0 0 0 14 0" />
+                    <path d="M12 18 v3" />
+                    <path d="M8 21 h8" />
+                  </svg>
+                  <span className="text-base tracking-wider">TAP TO START</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Config strip — below pitch, always visible */}
