@@ -17,6 +17,7 @@ import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
 import { StylePicker } from "../ui/StylePicker";
 import { PresetIO } from "../ui/PresetIO";
+import { useAutoRestart } from "../../hooks/use-auto-restart";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -102,6 +103,12 @@ export function MobileLayout() {
 
   useEffect(() => { syncSettings(); }, [key, presetName, harmonyMode, syncSettings]);
 
+  useAutoRestart({
+    signature: `${key.root}|${key.mode}|${presetName}|${harmonyMode}`,
+    start,
+    stop,
+  });
+
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
 
   return (
@@ -113,23 +120,26 @@ export function MobileLayout() {
           <span className="text-base font-bold tracking-tight" style={serif}>
             Harmonizer
           </span>
-          {!isListening ? (
-            <button
-              onClick={start}
-              className="px-4 py-2 bg-[var(--green)] hover:bg-[var(--green-dim)] active:scale-95 text-black rounded-full text-xs font-bold transition-all shadow-[0_0_16px_var(--green-glow)]"
-              style={{ minHeight: 36 }}
-            >
-              ▶ START
-            </button>
-          ) : (
-            <button
-              onClick={stop}
-              className="px-4 py-2 bg-[var(--red)] hover:bg-[var(--red-dim)] active:scale-95 text-white rounded-full text-xs font-bold transition-all animate-pulse"
-              style={{ minHeight: 36 }}
-            >
-              ■ STOP
-            </button>
-          )}
+          {/* Mic toggle — replaces the big START/STOP. The mic auto-starts on
+              the first user gesture; this small pill lets the user pause / resume. */}
+          <button
+            onClick={isListening ? stop : start}
+            title={isListening ? "Stop microphone" : "Start microphone"}
+            aria-label={isListening ? "Stop microphone" : "Start microphone"}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+              isListening
+                ? "bg-[var(--red)] text-white shadow-[0_0_12px_var(--red-glow)] active:scale-95"
+                : "bg-[var(--surface-raised)] text-[var(--text-mid)] border border-[var(--border)] active:scale-95"
+            }`}
+            style={{ minHeight: 34 }}
+          >
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                isListening ? "bg-white animate-pulse" : "bg-[var(--text-dim)]"
+              }`}
+            />
+            {isListening ? "LIVE" : "MIC"}
+          </button>
         </div>
 
         {/* Master volume strip */}

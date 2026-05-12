@@ -17,6 +17,7 @@ import { StringsPanel } from "../ui/StringsPanel";
 import { OrchestraPanel } from "../ui/OrchestraPanel";
 import { StylePicker } from "../ui/StylePicker";
 import { PresetIO } from "../ui/PresetIO";
+import { useAutoRestart } from "../../hooks/use-auto-restart";
 
 const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 const serif = { fontFamily: "'DM Serif Display', serif" } as const;
@@ -32,6 +33,15 @@ export function MainLayout() {
   const { start, stop, syncSettings, isReady: _isReady, error, pipeline } = useAudio();
 
   useEffect(() => { syncSettings(); }, [key, presetName, harmonyMode, syncSettings]);
+
+  // Auto-start on first interaction + clean stop/start cycle when key, preset
+  // or harmony mode changes (so all internal pipeline state refreshes — e.g.
+  // voice leader, autotuner, smoothed ratios — instead of carrying over).
+  useAutoRestart({
+    signature: `${key.root}|${key.mode}|${presetName}|${harmonyMode}`,
+    start,
+    stop,
+  });
 
   const analyser = pipeline.current?.getAnalyserNode() ?? null;
 
@@ -64,17 +74,25 @@ export function MainLayout() {
           onChange={(e) => { const v = Number(e.target.value); setMasterVolume(v); pipeline.current?.setMasterVolume(v); }}
           className="w-24" />
         <span className="text-[10px] text-[var(--text-dim)] w-5" style={mono}>{Math.round(masterVolume * 100)}</span>
-        {!isListening ? (
-          <button onClick={start}
-            className="px-3 py-0.5 bg-[var(--green)] hover:bg-[var(--green-dim)] text-black rounded text-[10px] font-bold transition-all hover:shadow-[0_0_12px_var(--green-glow)]">
-            START
-          </button>
-        ) : (
-          <button onClick={stop}
-            className="px-3 py-0.5 bg-[var(--red)] hover:bg-[var(--red-dim)] text-white rounded text-[10px] font-bold transition-all animate-pulse">
-            STOP
-          </button>
-        )}
+        {/* Mic status toggle — replaces the big START/STOP. Mic auto-starts on the
+            first user gesture; this small icon lets the user pause / resume. */}
+        <button
+          onClick={isListening ? stop : start}
+          title={isListening ? "Stop microphone" : "Start microphone"}
+          aria-label={isListening ? "Stop microphone" : "Start microphone"}
+          className={`flex items-center gap-1.5 px-2 h-6 rounded text-[10px] font-bold transition-all ${
+            isListening
+              ? "bg-[var(--red)] text-white hover:bg-[var(--red-dim)]"
+              : "bg-[var(--surface-raised)] text-[var(--text-mid)] hover:text-[var(--amber)] hover:bg-[var(--border)]"
+          }`}
+        >
+          <span
+            className={`inline-block w-1.5 h-1.5 rounded-full ${
+              isListening ? "bg-white animate-pulse" : "bg-[var(--text-dim)]"
+            }`}
+          />
+          {isListening ? "LIVE" : "MIC"}
+        </button>
       </header>
 
       {error && <p className="text-[var(--red)] text-center text-[10px] py-0.5 shrink-0">{error}</p>}
